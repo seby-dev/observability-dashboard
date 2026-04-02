@@ -1,0 +1,15 @@
+projects:
+  - id: organist_bot
+    name: OrganistBot
+    sheets_id: "1RImnnlM_tu4IIUae7LKHAYKVbyrAr6R8E-FQGSEi9h8"
+    sheet_name: Logs
+    # Path to your Google service account JSON key file
+    # Generate at: console.cloud.google.com → IAM → Service Accounts → Keys
+    credentials_file: /Users/sebby/Documents/Dev/organist_bot/credentials.json
+
+  # Add more projects below — no code changes needed:
+  # - id: my_next_project
+  #   name: My Next Project
+  #   sheets_id: "ANOTHER_SPREADSHEET_ID"
+  #   sheet_name: Logs
+  #   credentials_file: ~/.config/gcloud/my_next_project_sa.json

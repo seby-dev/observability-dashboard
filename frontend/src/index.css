@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────
+   DARK THEME (default)
+───────────────────────────────────────── */
+:root {
+  --bg-deep:  #0a0b0e;
+  --bg-card:  #111318;
+  --bg-hover: #181c24;
+  --border:   #1e2330;
+  --text-1:   #e8eaf0;
+  --text-2:   #8892a4;
+  --text-3:   #4a5568;
+  --indigo:   #6366f1;
+  --indigo-d: #4f46e5;
+  --cyan:     #22d3ee;
+  --emerald:  #10b981;
+  --amber:    #f59e0b;
+  --red:      #ef4444;
+  --sky:      #38bdf8;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ─────────────────────────────────────────
+   LIGHT THEME
+───────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-deep:  #f1f3f7;
+  --bg-card:  #ffffff;
+  --bg-hover: #f5f7fa;
+  --border:   #e2e7ef;
+  --text-1:   #111827;
+  --text-2:   #4b5563;
+  --text-3:   #9ca3af;
+  --indigo:   #6366f1;
+  --indigo-d: #4f46e5;
+  --cyan:     #0891b2;
+  --emerald:  #059669;
+  --amber:    #d97706;
+  --red:      #dc2626;
+  --sky:      #0284c7;
+}
+
+/* ─────────────────────────────────────────
+   BASE
+───────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html {
+  transition: background-color 0.2s ease;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-deep);
+  color: var(--text-1);
+  transition: background-color 0.2s ease, color 0.15s ease;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ─────────────────────────────────────────
+   COMPONENT UTILITIES
+───────────────────────────────────────── */
+
+/* Seamless KPI grid — gap shows through as 1px divider lines */
+.oh-grid {
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* 4-column KPI grid — collapses to 2 on tablet, 1 on mobile */
+.oh-grid-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 767px) { .oh-grid-4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 399px) { .oh-grid-4 { grid-template-columns: 1fr; } }
+
+/* 2-column chart grid — stacks on mobile */
+.oh-chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 767px) { .oh-chart-grid { grid-template-columns: 1fr; } }
+
+/* Section label */
+.oh-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 0;
+}
+
+/* Animated bar — used in FilterBreakdown */
+.oh-bar {
+  transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+              height 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Pulse skeleton */
+@keyframes oh-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.oh-skeleton {
+  background: var(--bg-hover);
+  border-radius: 12px;
+  animation: oh-pulse 2s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────
+   RESPONSIVE LAYOUT HELPERS
+───────────────────────────────────────── */
+
+/* Header inner — tighter padding on mobile */
+.oh-header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+@media (max-width: 479px) {
+  .oh-header-inner { padding: 0 16px; gap: 10px; }
+  .oh-header-title { display: none; }
+}
+
+/* Main content area */
+.oh-main {
+  flex: 1;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 32px 24px;
+}
+@media (max-width: 479px) { .oh-main { padding: 20px 16px; } }

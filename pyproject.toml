@@ -1,0 +1,19 @@
+[project]
+name = "observability-dashboard"
+version = "0.1.0"
+description = "Log analyzer & observability dashboard for all projects"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "google-auth>=2.38",
+    "google-api-python-client>=2.165",
+    "aiosqlite>=0.21",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.1",
+    "apscheduler>=3.11",
+    "httpx>=0.28",
+]
+
+[tool.uv]
+dev-dependencies = []
