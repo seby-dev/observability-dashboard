@@ -1,0 +1,1837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Observability Dashboard — Technical Report</title>
+<style>
+  /* ── Fonts ── */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink:       #111827;
+    --ink-2:     #374151;
+    --ink-3:     #6b7280;
+    --ink-4:     #9ca3af;
+    --bg:        #ffffff;
+    --bg-soft:   #f9fafb;
+    --bg-code:   #f3f4f6;
+    --border:    #e5e7eb;
+    --indigo:    #6366f1;
+    --indigo-l:  #eef2ff;
+    --cyan:      #0891b2;
+    --emerald:   #059669;
+    --amber:     #d97706;
+    --red:       #dc2626;
+    --sky:       #0284c7;
+    --rose:      #e11d48;
+    --radius:    10px;
+  }
+
+  html { font-size: 15px; scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Print ── */
+  @media print {
+    .sidebar { display: none; }
+    .layout { display: block; }
+    .content { max-width: 100%; padding: 0 2cm; }
+    section { page-break-inside: avoid; }
+    .page-break { page-break-before: always; }
+    a { color: inherit; text-decoration: none; }
+  }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--bg-soft);
+    border-right: 1px solid var(--border);
+    padding: 32px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 24px 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .sidebar-logo {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--indigo);
+    color: #fff; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .sidebar-brand-text { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .sidebar-brand-sub  { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+  .sidebar nav { padding: 0 12px; }
+  .nav-section {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-4);
+    padding: 10px 12px 4px;
+  }
+  .nav-link {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 7px;
+    font-size: 13px; color: var(--ink-2);
+    text-decoration: none;
+    transition: background 0.1s, color 0.1s;
+  }
+  .nav-link:hover { background: var(--border); color: var(--ink); }
+  .nav-link .num {
+    font-size: 10px; font-weight: 600; color: var(--indigo);
+    background: var(--indigo-l); border-radius: 20px;
+    padding: 0 6px; min-width: 20px; text-align: center;
+  }
+
+  /* ── Content ── */
+  .content {
+    max-width: 900px;
+    padding: 60px 64px 120px;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .content { padding: 40px 24px; }
+  }
+
+  /* ── Cover ── */
+  .cover {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 48px;
+    margin-bottom: 60px;
+  }
+  .cover-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--indigo-l); color: var(--indigo);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 12px; font-weight: 600;
+    margin-bottom: 20px;
+  }
+  .cover h1 {
+    font-size: 40px; font-weight: 700; line-height: 1.15;
+    color: var(--ink); margin-bottom: 16px;
+    letter-spacing: -0.5px;
+  }
+  .cover-sub {
+    font-size: 16px; color: var(--ink-3); margin-bottom: 32px;
+    max-width: 600px; line-height: 1.6;
+  }
+  .cover-meta {
+    display: flex; flex-wrap: wrap; gap: 24px;
+  }
+  .cover-meta-item {
+    display: flex; flex-direction: column;
+  }
+  .cover-meta-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-4); }
+  .cover-meta-value { font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+  .cover-meta-value.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+  /* ── Section ── */
+  section { margin-bottom: 72px; }
+  .section-header {
+    display: flex; align-items: flex-start; gap: 16px;
+    margin-bottom: 32px;
+  }
+  .section-num {
+    font-size: 11px; font-weight: 700; color: var(--indigo);
+    background: var(--indigo-l); border-radius: 6px;
+    padding: 4px 9px; margin-top: 4px; flex-shrink: 0;
+  }
+  section h2 {
+    font-size: 26px; font-weight: 700; color: var(--ink);
+    letter-spacing: -0.3px; line-height: 1.2;
+  }
+  section h2 + p {
+    font-size: 15px; color: var(--ink-3); margin-top: 6px;
+  }
+  section h3 {
+    font-size: 17px; font-weight: 600; color: var(--ink);
+    margin: 36px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  section h4 {
+    font-size: 14px; font-weight: 600; color: var(--ink-2);
+    margin: 24px 0 8px;
+  }
+  p { margin-bottom: 14px; color: var(--ink-2); }
+  a { color: var(--indigo); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul, ol { padding-left: 22px; margin-bottom: 14px; }
+  li { color: var(--ink-2); margin-bottom: 5px; }
+  li strong { color: var(--ink); }
+
+  /* ── Code ── */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--rose);
+  }
+  pre {
+    background: #1e1e2e;
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    overflow-x: auto;
+    margin: 16px 0 20px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  pre code {
+    font-size: 12.5px;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #cdd6f4;
+    line-height: 1.65;
+  }
+  .kw  { color: #cba6f7; } /* keywords */
+  .fn  { color: #89b4fa; } /* function names */
+  .st  { color: #a6e3a1; } /* strings */
+  .cm  { color: #6c7086; } /* comments */
+  .nb  { color: #fab387; } /* numbers */
+  .cl  { color: #f38ba8; } /* class names */
+  .dc  { color: #74c7ec; } /* decorators */
+  .ty  { color: #cdd6f4; } /* types / normal text */
+
+  /* ── Cards / Callouts ── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .card {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-4);
+    margin-bottom: 6px;
+  }
+  .card-value {
+    font-size: 22px; font-weight: 700; color: var(--ink);
+    font-family: 'JetBrains Mono', monospace; line-height: 1;
+    margin-bottom: 4px;
+  }
+  .card-sub { font-size: 12px; color: var(--ink-3); }
+  .card .accent-bar {
+    height: 3px; border-radius: 2px; margin-bottom: 14px;
+  }
+
+  .callout {
+    display: flex; gap: 14px;
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin: 20px 0;
+  }
+  .callout-info   { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .callout-tip    { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .callout-warn   { background: #fffbeb; border: 1px solid #fde68a; }
+  .callout-danger { background: #fff1f2; border: 1px solid #fecdd3; }
+  .callout-icon   { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .callout-body   { flex: 1; }
+  .callout-body strong { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .callout-body p { font-size: 13px; color: var(--ink-2); margin: 0; }
+
+  /* ── Tables ── */
+  .table-wrap { overflow-x: auto; margin: 16px 0 24px; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  th {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-3);
+    padding: 8px 12px; text-align: left;
+    border-bottom: 2px solid var(--border);
+    background: var(--bg-soft);
+  }
+  td {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    color: var(--ink-2); vertical-align: top;
+  }
+  tr:hover td { background: var(--bg-soft); }
+  td code { font-size: 11.5px; }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-block; border-radius: 20px;
+    font-size: 10px; font-weight: 600; padding: 2px 8px;
+  }
+  .badge-indigo  { background: var(--indigo-l); color: var(--indigo); }
+  .badge-emerald { background: #d1fae5; color: var(--emerald); }
+  .badge-amber   { background: #fef3c7; color: var(--amber); }
+  .badge-red     { background: #fee2e2; color: var(--red); }
+  .badge-sky     { background: #e0f2fe; color: var(--sky); }
+  .badge-gray    { background: #f3f4f6; color: var(--ink-3); }
+
+  /* ── Architecture diagram ── */
+  .arch-diagram {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin: 24px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 2;
+    color: var(--ink-2);
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* ── File tree ── */
+  .file-tree {
+    background: #1e1e2e;
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.9;
+    color: #cdd6f4;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .ft-dir  { color: #89b4fa; }
+  .ft-file { color: #cdd6f4; }
+  .ft-py   { color: #a6e3a1; }
+  .ft-ts   { color: #74c7ec; }
+  .ft-css  { color: #f38ba8; }
+  .ft-cfg  { color: #fab387; }
+  .ft-cm   { color: #6c7086; }
+
+  /* ── Divider ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+
+  /* ── Pill list ── */
+  .pill-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 20px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px;
+    font-size: 13px; color: var(--ink-2);
+  }
+  .pill-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  /* ── Lesson / takeaway blocks ── */
+  .lesson {
+    display: flex; gap: 16px;
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+    margin: 16px 0;
+  }
+  .lesson-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px; font-weight: 700; color: var(--indigo);
+    opacity: 0.35; line-height: 1; flex-shrink: 0; min-width: 28px;
+  }
+  .lesson-body h4 { margin: 0 0 6px; font-size: 14px; color: var(--ink); }
+  .lesson-body p  { font-size: 13px; color: var(--ink-2); margin: 0; }
+
+  /* ── Glossary ── */
+  .glossary-term {
+    display: flex; gap: 20px;
+    padding: 14px 0; border-bottom: 1px solid var(--border);
+  }
+  .glossary-term:last-child { border-bottom: none; }
+  .g-term {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px; font-weight: 600;
+    color: var(--indigo); min-width: 200px; flex-shrink: 0;
+    padding-top: 2px;
+  }
+  .g-def { font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+
+  /* ── Roadmap ── */
+  .roadmap-item {
+    display: flex; gap: 16px; align-items: flex-start;
+    padding: 16px 0; border-bottom: 1px solid var(--border);
+  }
+  .roadmap-item:last-child { border-bottom: none; }
+  .roadmap-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .roadmap-body { flex: 1; }
+  .roadmap-body h4 { font-size: 14px; color: var(--ink); margin: 0 0 4px; }
+  .roadmap-body p  { font-size: 13px; color: var(--ink-3); margin: 0; }
+  .roadmap-meta { display: flex; gap: 8px; margin-top: 8px; }
+
+  /* ── Stack pill ── */
+  .stack-row {
+    display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0;
+  }
+  .stack-pill {
+    display: flex; flex-direction: column;
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 18px;
+    min-width: 120px;
+  }
+  .stack-pill-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .stack-pill-role { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--ink-4); text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ─────────────── SIDEBAR ─────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-logo">OH</div>
+    <div>
+      <div class="sidebar-brand-text">Organist Hub</div>
+      <div class="sidebar-brand-sub">Technical Report</div>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-section">Report Contents</div>
+    <a class="nav-link" href="#executive-summary"><span class="num">01</span> Executive Summary</a>
+    <a class="nav-link" href="#architecture"><span class="num">02</span> Architecture</a>
+    <a class="nav-link" href="#modules"><span class="num">03</span> Module Breakdown</a>
+    <a class="nav-link" href="#best-practices"><span class="num">04</span> Software Best Practices</a>
+    <a class="nav-link" href="#python-idioms"><span class="num">05</span> Python Idioms</a>
+    <a class="nav-link" href="#performance"><span class="num">06</span> Performance</a>
+    <a class="nav-link" href="#product"><span class="num">07</span> Product Development</a>
+    <a class="nav-link" href="#glossary"><span class="num">08</span> Glossary</a>
+    <a class="nav-link" href="#roadmap"><span class="num">09</span> Future Roadmap</a>
+    <a class="nav-link" href="#career"><span class="num">10</span> Career Takeaways</a>
+  </nav>
+</aside>
+
+<!-- ─────────────── MAIN CONTENT ─────────────── -->
+<main class="content">
+
+  <!-- COVER -->
+  <div class="cover">
+    <div class="cover-badge">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--indigo);display:inline-block;"></span>
+      Full-Stack Observability Platform
+    </div>
+    <h1>Observability Dashboard<br>Technical Report</h1>
+    <p class="cover-sub">
+      A comprehensive analysis of the architecture, engineering decisions, Python idioms,
+      performance strategies, and product lessons embedded in the Organist Hub observability
+      platform — built to monitor, visualise, and alert on automated job-scraping runs.
+    </p>
+    <div class="cover-meta">
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Project</span>
+        <span class="cover-meta-value">Observability Dashboard</span>
+      </div>
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Version</span>
+        <span class="cover-meta-value mono">0.1.0</span>
+      </div>
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Backend</span>
+        <span class="cover-meta-value">FastAPI · Python 3.13</span>
+      </div>
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Frontend</span>
+        <span class="cover-meta-value">React 19 · TypeScript · Vite</span>
+      </div>
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Database</span>
+        <span class="cover-meta-value">SQLite · aiosqlite</span>
+      </div>
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Report Date</span>
+        <span class="cover-meta-value">March 2026</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SECTION 1 — EXECUTIVE SUMMARY
+  ══════════════════════════════════════ -->
+  <section id="executive-summary">
+    <div class="section-header">
+      <div class="section-num">01</div>
+      <div>
+        <h2>Executive Summary</h2>
+        <p>What this system does, why it was built, and what was achieved.</p>
+      </div>
+    </div>
+
+    <p>
+      The <strong>Observability Dashboard</strong> is a full-stack internal tool built to provide
+      real-time visibility into the operational health of <em>organist_bot</em> — an automated
+      gig-finding system that scrapes music job listings, filters them by configurable criteria,
+      and notifies the user via Telegram.
+    </p>
+    <p>
+      Because organist_bot runs autonomously on a schedule, understanding <em>what happened</em>
+      during each run — how many gigs were found, how fast it ran, whether any errors occurred,
+      and which filters rejected the most opportunities — was previously only possible by
+      manually reading raw Google Sheets log rows. This dashboard transforms that raw data into
+      actionable metrics, interactive charts, and alert-ready health indicators.
+    </p>
+
+    <h3>Problem Statement</h3>
+    <p>
+      Raw log data stored in Google Sheets is verbose and unstructured. Without aggregation,
+      answering even simple operational questions requires significant manual effort:
+    </p>
+    <ul>
+      <li>Has the bot been running faster or slower recently?</li>
+      <li>What percentage of runs encountered errors this week?</li>
+      <li>Which filter configuration is rejecting the most gigs on average?</li>
+      <li>How does today's listing volume compare to the past month?</li>
+    </ul>
+
+    <h3>Solution</h3>
+    <p>
+      A FastAPI backend syncs log data incrementally from Google Sheets into a local SQLite
+      database. Purpose-built SQL aggregate queries — including window functions for cumulative
+      metrics — power a set of REST API endpoints. A React/TypeScript frontend renders these
+      metrics as interactive area charts, KPI cards, filterable run tables, and drill-down
+      detail pages, all auto-refreshing every 60 seconds.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="accent-bar" style="background:var(--indigo);"></div>
+        <div class="card-label">Backend Lines</div>
+        <div class="card-value">~700</div>
+        <div class="card-sub">Python across 6 modules</div>
+      </div>
+      <div class="card">
+        <div class="accent-bar" style="background:var(--cyan);"></div>
+        <div class="card-label">Frontend Lines</div>
+        <div class="card-value">~2 400</div>
+        <div class="card-sub">TypeScript/TSX across 12 files</div>
+      </div>
+      <div class="card">
+        <div class="accent-bar" style="background:var(--emerald);"></div>
+        <div class="card-label">API Endpoints</div>
+        <div class="card-value">9</div>
+        <div class="card-sub">REST endpoints, all async</div>
+      </div>
+      <div class="card">
+        <div class="accent-bar" style="background:var(--amber);"></div>
+        <div class="card-label">React Components</div>
+        <div class="card-value">12</div>
+        <div class="card-sub">All functional with hooks</div>
+      </div>
+    </div>
+
+    <h3>Key Capabilities Delivered</h3>
+    <ul>
+      <li><strong>Incremental sync</strong> — Only new Google Sheets rows are fetched on each sync cycle, keeping the API fast and quota-efficient.</li>
+      <li><strong>Multi-sheet tab sync</strong> — Automatically discovers and syncs all rotated log tabs (<code>Logs</code>, <code>Logs 2</code>, <code>Logs 3</code>, …) created when organist_bot hits the 900k-cell threshold. Each tab is tracked independently in <code>sync_state</code>.</li>
+      <li><strong>Content-based deduplication</strong> — Rows are deduplicated by <code>(project_id, run_id, timestamp, module, function, line)</code> rather than sheet row number, so clearing and re-using a sheet never causes silent data loss.</li>
+      <li><strong>Cumulative health metrics</strong> — Warning and error rates are computed as running percentages over all historical runs, matching the formula used in summary KPI cards.</li>
+      <li><strong>Time-series charts</strong> — Run speed, health rate, and listing volume all support flexible date ranges (3H to 3M) plus a custom date-picker.</li>
+      <li><strong>Filter rejection breakdown</strong> — Aggregated average rejections per filter per run, visualised as a time-series line chart. <code>AvailabilityFilter</code> block and only modes appear as separate lines; legacy <code>BookedDateFilter</code> data is remapped automatically.</li>
+      <li><strong>Run detail drill-down</strong> — Per-run phase timing, funnel counts, JSON log viewer, and per-filter gig rejection tables sorted by fee.</li>
+      <li><strong>Dark / light theme toggle</strong> — Persisted to localStorage, applied via CSS custom properties.</li>
+      <li><strong>Telegram alerts</strong> — Warning/Error/Critical logs trigger real-time alerts after each sync.</li>
+      <li><strong>Auto-scheduled sync</strong> — APScheduler background job runs every N minutes (configurable via <code>.env</code>).</li>
+    </ul>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 2 — ARCHITECTURE
+  ══════════════════════════════════════ -->
+  <section id="architecture">
+    <div class="section-header">
+      <div class="section-num">02</div>
+      <div>
+        <h2>Project Architecture &amp; Design</h2>
+        <p>System topology, data flow, and design rationale.</p>
+      </div>
+    </div>
+
+    <h3>High-Level Topology</h3>
+
+    <div class="arch-diagram">  ┌─────────────────────────────────────────────────────┐
+  │                  EXTERNAL DATA SOURCES               │
+  │   Google Sheets (organist_bot writes logs here)      │
+  └───────────────────────┬─────────────────────────────┘
+                          │  Sheets API (readonly, service account)
+                          ▼
+  ┌─────────────────────────────────────────────────────┐
+  │                   FASTAPI BACKEND                    │
+  │                                                      │
+  │  config.py   ←  projects.yaml + .env                 │
+  │  sheets.py   →  incremental row fetch + parse        │
+  │  db.py       →  SQLite schema + async queries        │
+  │  metrics.py  →  aggregation + window functions       │
+  │  alerts.py   →  Telegram notify on WARNING+          │
+  │  scheduler.py→  APScheduler: sync every N min        │
+  │  main.py     →  FastAPI routes + CORS + lifespan     │
+  │                                                      │
+  │  Listening: http://localhost:8000                    │
+  └──────────────────────┬──────────────────────────────┘
+                         │  REST JSON API  /api/...
+                         │  (Vite dev proxy → localhost:8000)
+                         ▼
+  ┌─────────────────────────────────────────────────────┐
+  │                  REACT FRONTEND                      │
+  │                                                      │
+  │  App.tsx       Shell + router + theme + project sel  │
+  │  Dashboard.tsx KPI cards + charts + runs table       │
+  │  RunDetail.tsx Per-run timing + logs + filter table  │
+  │                                                      │
+  │  Components:  MetricCard  SpeedChart   HealthChart   │
+  │               ListingsChart  FilterBreakdown         │
+  │               RunsTable  LogStream  PhaseBreakdown   │
+  │               JsonTree  DatePicker                   │
+  │                                                      │
+  │  Serving: http://localhost:5173                      │
+  └─────────────────────────────────────────────────────┘</div>
+
+    <h3>Data Flow</h3>
+    <p>
+      The system operates on a <strong>pull-sync-serve</strong> loop:
+    </p>
+    <ol>
+      <li><strong>organist_bot</strong> appends structured log rows to Google Sheets during each run (scrape → filter → notify phases).</li>
+      <li>The <strong>scheduler</strong> fires every N minutes and calls <code>sync_project()</code>, which first calls <code>_discover_log_sheets()</code> to find all rotated log tabs (<code>Logs</code>, <code>Logs 2</code>, <code>Logs 3</code>, …), then reads only new rows from each tab (row number tracked per sheet in <code>sync_state</code>).</li>
+      <li>New rows are parsed and bulk-inserted into SQLite via <code>INSERT OR IGNORE</code> (idempotent by content key <code>(project_id, run_id, timestamp, module, function, line)</code> — resilient to sheet resets).</li>
+      <li>After each sync, <code>process_alerts()</code> queries for any unsent WARNING/ERROR/CRITICAL logs and dispatches Telegram messages.</li>
+      <li>The React frontend polls each metric endpoint every 60 seconds via TanStack Query. Charts respond to date-range controls through URL query params.</li>
+    </ol>
+
+    <h3>Design Decisions &amp; Rationale</h3>
+
+    <h4>Why SQLite instead of Postgres?</h4>
+    <p>
+      The workload is read-heavy, single-machine, and low-concurrency (one writer: the sync job;
+      many readers: dashboard queries). SQLite eliminates operational overhead — no server process,
+      no connection pooling, no credentials. <code>aiosqlite</code> wraps it in an async interface
+      compatible with FastAPI's event loop, giving the ergonomics of a "real" async database
+      without the cost.
+    </p>
+
+    <h4>Why Google Sheets as the source of truth?</h4>
+    <p>
+      organist_bot already wrote structured logs to Sheets. Rather than requiring the bot to be
+      re-architected to push to a database directly, the dashboard treats Sheets as an append-only
+      log store and syncs incrementally. This keeps the bot simple and the dashboard independently
+      deployable.
+    </p>
+
+    <h4>Why React Query (TanStack Query)?</h4>
+    <p>
+      Raw <code>fetch</code> calls in components create duplication and race conditions. TanStack
+      Query provides automatic caching, deduplication, background refresh, and loading/error states
+      out of the box — turning what would be 40 lines of state management into a single
+      <code>useQuery</code> call.
+    </p>
+
+    <h4>Why CSS custom properties for theming instead of a CSS-in-JS library?</h4>
+    <p>
+      CSS variables (<code>--bg-card</code>, <code>--indigo</code>, etc.) toggled by a
+      <code>data-theme</code> attribute on <code>&lt;html&gt;</code> give zero-JS theming with
+      smooth CSS transitions — no runtime overhead, no hydration issues, and full browser-native
+      performance.
+    </p>
+
+    <h3>Technology Stack</h3>
+    <div class="stack-row">
+      <div class="stack-pill"><span class="stack-pill-name">FastAPI</span><span class="stack-pill-role">HTTP framework + OpenAPI</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">Python 3.13</span><span class="stack-pill-role">Backend runtime</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">aiosqlite</span><span class="stack-pill-role">Async SQLite driver</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">APScheduler</span><span class="stack-pill-role">Background scheduler</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">httpx</span><span class="stack-pill-role">Async HTTP (Telegram)</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">google-api-python-client</span><span class="stack-pill-role">Sheets API</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">React 19</span><span class="stack-pill-role">UI framework</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">TypeScript</span><span class="stack-pill-role">Type-safe JS</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">Vite</span><span class="stack-pill-role">Build tool + dev server</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">TanStack Query</span><span class="stack-pill-role">Server state management</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">Recharts</span><span class="stack-pill-role">SVG chart library</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">Lucide React</span><span class="stack-pill-role">Icon set</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">React Router</span><span class="stack-pill-role">Client-side routing</span></div>
+      <div class="stack-pill"><span class="stack-pill-name">Tailwind CSS v4</span><span class="stack-pill-role">Utility classes (JsonTree)</span></div>
+    </div>
+
+    <h3>Project File Structure</h3>
+    <div class="file-tree"><span class="ft-dir">observability-dashboard/</span>
+├── <span class="ft-cfg">pyproject.toml</span>          <span class="ft-cm"># Python deps (uv)</span>
+├── <span class="ft-cfg">projects.yaml</span>           <span class="ft-cm"># Project definitions</span>
+├── <span class="ft-cfg">.env</span>                    <span class="ft-cm"># Secrets (Telegram, DB path)</span>
+├── <span class="ft-dir">backend/</span>
+│   ├── <span class="ft-py">__init__.py</span>
+│   ├── <span class="ft-py">config.py</span>           <span class="ft-cm"># Settings dataclasses + YAML loader</span>
+│   ├── <span class="ft-py">db.py</span>               <span class="ft-cm"># Schema, migrations, async queries</span>
+│   ├── <span class="ft-py">sheets.py</span>           <span class="ft-cm"># Google Sheets incremental sync</span>
+│   ├── <span class="ft-py">metrics.py</span>          <span class="ft-cm"># SQL aggregate + window functions</span>
+│   ├── <span class="ft-py">alerts.py</span>           <span class="ft-cm"># Telegram alert sender</span>
+│   ├── <span class="ft-py">scheduler.py</span>        <span class="ft-cm"># APScheduler background job</span>
+│   └── <span class="ft-py">main.py</span>             <span class="ft-cm"># FastAPI app + routes</span>
+└── <span class="ft-dir">frontend/</span>
+    ├── <span class="ft-cfg">vite.config.ts</span>      <span class="ft-cm"># Dev proxy: /api → :8000</span>
+    ├── <span class="ft-cfg">package.json</span>
+    └── <span class="ft-dir">src/</span>
+        ├── <span class="ft-ts">main.tsx</span>
+        ├── <span class="ft-ts">App.tsx</span>             <span class="ft-cm"># Shell, router, theme, project selector</span>
+        ├── <span class="ft-css">index.css</span>           <span class="ft-cm"># CSS custom properties + responsive utils</span>
+        ├── <span class="ft-dir">api/</span>
+        │   └── <span class="ft-ts">client.ts</span>           <span class="ft-cm"># All API calls + TypeScript interfaces</span>
+        ├── <span class="ft-dir">pages/</span>
+        │   ├── <span class="ft-ts">Dashboard.tsx</span>       <span class="ft-cm"># Main overview page</span>
+        │   └── <span class="ft-ts">RunDetail.tsx</span>       <span class="ft-cm"># Per-run drill-down page</span>
+        └── <span class="ft-dir">components/</span>
+            ├── <span class="ft-ts">MetricCard.tsx</span>      <span class="ft-cm"># KPI card with accent bar</span>
+            ├── <span class="ft-ts">SpeedChart.tsx</span>      <span class="ft-cm"># Run speed area chart</span>
+            ├── <span class="ft-ts">HealthChart.tsx</span>     <span class="ft-cm"># Cumulative warn/error rate chart</span>
+            ├── <span class="ft-ts">ListingsChart.tsx</span>   <span class="ft-cm"># Avg gigs per day chart</span>
+            ├── <span class="ft-ts">DatePicker.tsx</span>      <span class="ft-cm"># Custom dropdown calendar</span>
+            ├── <span class="ft-ts">FilterBreakdown.tsx</span> <span class="ft-cm"># Animated bar chart of filters</span>
+            ├── <span class="ft-ts">RunsTable.tsx</span>       <span class="ft-cm"># Paginated run table with status pills</span>
+            ├── <span class="ft-ts">LogStream.tsx</span>       <span class="ft-cm"># Expandable log table with level filter</span>
+            ├── <span class="ft-ts">PhaseBreakdown.tsx</span>  <span class="ft-cm"># Stacked timing bar</span>
+            └── <span class="ft-ts">JsonTree.tsx</span>        <span class="ft-cm"># Collapsible JSON explorer</span></div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 3 — MODULE BREAKDOWN
+  ══════════════════════════════════════ -->
+  <section id="modules">
+    <div class="section-header">
+      <div class="section-num">03</div>
+      <div>
+        <h2>Complete Module &amp; File Breakdown</h2>
+        <p>What every file does, the key logic inside it, and why it was written that way.</p>
+      </div>
+    </div>
+
+    <h3>Backend — <code>backend/config.py</code></h3>
+    <p>
+      Loads configuration from two sources: <code>projects.yaml</code> (project definitions)
+      and <code>.env</code> (secrets). Uses Python <code>@dataclass</code> for structured,
+      type-annotated config objects instead of plain dicts.
+    </p>
+    <ul>
+      <li><strong><code>ProjectConfig</code></strong> — holds <code>id</code>, <code>name</code>, <code>sheets_id</code>, <code>sheet_name</code>, <code>credentials_file</code> for one monitored project.</li>
+      <li><strong><code>Settings</code></strong> — top-level config: list of projects, Telegram credentials, sync interval, DB path.</li>
+      <li><strong><code>PROJECT_MAP</code></strong> — a module-level <code>dict[str, ProjectConfig]</code> for O(1) lookup by project ID across all request handlers.</li>
+    </ul>
+    <div class="callout callout-tip">
+      <div class="callout-icon">💡</div>
+      <div class="callout-body">
+        <strong>Design choice: module-level singleton</strong>
+        <p>Config is loaded once at import time via <code>settings = load_settings()</code>. FastAPI
+        imports happen once per process, so this is safe and avoids repeated YAML parsing on every request.</p>
+      </div>
+    </div>
+
+    <h3>Backend — <code>backend/db.py</code></h3>
+    <p>
+      Owns the SQLite schema, connection management, and all data-access queries. It is the only
+      module that ever calls <code>aiosqlite.connect()</code>.
+    </p>
+
+    <h4>Schema</h4>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Table</th><th>Purpose</th><th>Key columns</th></tr></thead>
+        <tbody>
+          <tr><td><code>logs</code></td><td>Every log line from every run</td><td><code>project_id</code>, <code>run_id</code>, <code>timestamp</code>, <code>level</code>, <code>message</code>, <code>details</code> (JSON), <code>alert_sent</code></td></tr>
+          <tr><td><code>sync_state</code></td><td>Tracks last synced row per project per sheet tab</td><td><code>project_id</code> + <code>sheet_name</code> (composite PK), <code>last_row</code>, <code>last_synced_at</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Key Patterns</h4>
+    <ul>
+      <li><strong>Context manager connection</strong> — <code>@asynccontextmanager async def get_db()</code> wraps every connection in a <code>try/finally</code>-equivalent, ensuring the connection is always closed even if a query raises.</li>
+      <li><strong><code>row_factory = aiosqlite.Row</code></strong> — enables <code>row["column_name"]</code> access instead of positional indexing, which makes query results self-documenting.</li>
+      <li><strong><code>INSERT OR IGNORE</code></strong> — the unique dedup index on <code>(project_id, run_id, timestamp, module, function, line)</code> makes every insert idempotent by log content rather than sheet position. Re-syncing the same rows, or syncing from a reset sheet, is safe — existing rows are silently skipped.</li>
+      <li><strong><code>_RUNS_CTE</code></strong> — a shared SQL Common Table Expression that pivots per-log-line rows into per-run summary rows using conditional aggregation (<code>MAX(CASE WHEN ...)</code>). Reused by both <code>list_runs()</code> and <code>get_run()</code> to keep the SQL in one place.</li>
+      <li><strong>Indices</strong> — five indices cover the access patterns: <code>(project_id, run_id)</code>, <code>(project_id, timestamp)</code>, <code>(project_id, level)</code>, <code>(project_id, alert_sent, level)</code>, and the content-based dedup index above. Almost every query is an index scan, not a full table scan.</li>
+    </ul>
+
+    <h3>Backend — <code>backend/sheets.py</code></h3>
+    <p>
+      Handles all communication with the Google Sheets API, transforming raw row arrays into
+      structured dicts ready for SQLite insertion.
+    </p>
+    <ul>
+      <li><strong><code>_build_service()</code></strong> — creates a Sheets API service client using a service account JSON key file. <code>cache_discovery=False</code> prevents writing discovery docs to disk in serverless-style environments.</li>
+      <li><strong><code>_discover_log_sheets()</code></strong> — calls the Sheets API's <code>spreadsheets.get</code> method to list all sheet tabs, then returns those whose titles match <code>Logs</code>, <code>Logs 2</code>, <code>Logs 3</code>, etc. organist_bot rotates to a new tab when a sheet approaches the 900k-cell limit; discovery ensures the dashboard automatically picks up new tabs without config changes.</li>
+      <li><strong><code>_row_to_dict()</code></strong> — maps a raw list of cell values to a named dict. Uses a defensive inner function <code>_get(index)</code> that returns <code>""</code> for any missing column, making the parser resilient to short rows (common when optional fields are blank).</li>
+      <li><strong>Incremental fetch</strong> — <code>last_row</code> is read from <code>sync_state</code> (keyed by <code>(project_id, sheet_name)</code>) before every sync. The API range is <code>A{last_row+1}:I</code>, so only genuinely new rows are transferred. Each tab is tracked independently, so a new tab starts from row 1 without affecting the cursor of older tabs.</li>
+    </ul>
+
+    <h3>Backend — <code>backend/metrics.py</code></h3>
+    <p>
+      The analytical core of the backend. Contains five async functions, each returning structured
+      data for a specific chart or KPI section. No HTTP logic lives here — it is purely a
+      data-transformation layer.
+    </p>
+
+    <h4><code>get_overview()</code></h4>
+    <p>
+      Executes eight separate SQL queries to populate the two KPI rows on the dashboard. Uses
+      Python's <code>statistics</code> module for in-process mean and median calculations on
+      speed data (Python is fast enough for lists of a few hundred numbers; no need for SQL here).
+    </p>
+    <p>
+      The most subtle part: <em>runs today</em> requires the caller to pass a timezone string
+      (<code>tz</code>), which is used with Python's <code>ZoneInfo</code> to compute the correct
+      UTC midnight for "today" in the user's local timezone. The frontend sends
+      <code>Intl.DateTimeFormat().resolvedOptions().timeZone</code> as the <code>tz</code>
+      query parameter so the backend always works in the user's local day boundary.
+    </p>
+
+    <h4><code>get_speed_series()</code></h4>
+    <p>
+      Returns per-run timing breakdowns. Uses a template SQL string (<code>SELECT_COLS</code>)
+      with f-string conditional clauses to handle two modes: time-windowed (when <code>since</code>
+      is provided) and limit-based (when no date range is selected). The results are reversed
+      after fetching so the chart always receives chronological order.
+    </p>
+
+    <h4><code>get_health_series()</code> — The Most Important Function</h4>
+    <p>
+      This function produces the cumulative warning/error rate series. It is the most technically
+      sophisticated piece of code in the project, and its design was the result of a deliberate
+      debugging session to fix a metric mismatch.
+    </p>
+    <pre><code><span class="cm">-- Two-stage CTE with SQL window functions</span>
+<span class="kw">WITH</span> per_run <span class="kw">AS</span> (
+    <span class="kw">SELECT</span>
+        run_id,
+        <span class="fn">MIN</span>(timestamp) <span class="kw">AS</span> started_at,
+        <span class="fn">MAX</span>(<span class="kw">CASE WHEN</span> level = <span class="st">'WARNING'</span> <span class="kw">THEN</span> <span class="nb">1</span> <span class="kw">ELSE</span> <span class="nb">0</span> <span class="kw">END</span>) <span class="kw">AS</span> has_warning,
+        <span class="fn">MAX</span>(<span class="kw">CASE WHEN</span> level <span class="kw">IN</span> (<span class="st">'ERROR'</span>, <span class="st">'CRITICAL'</span>) <span class="kw">THEN</span> <span class="nb">1</span> <span class="kw">ELSE</span> <span class="nb">0</span> <span class="kw">END</span>) <span class="kw">AS</span> has_error
+    <span class="kw">FROM</span> logs
+    <span class="kw">WHERE</span> project_id = ?       <span class="cm">-- ← NO time filter here — must see ALL runs</span>
+    <span class="kw">GROUP BY</span> run_id
+),
+with_rates <span class="kw">AS</span> (
+    <span class="kw">SELECT</span>
+        started_at,
+        <span class="fn">ROUND</span>(
+            <span class="fn">SUM</span>(has_warning) <span class="kw">OVER</span> (<span class="kw">ORDER BY</span> started_at
+                <span class="kw">ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</span>
+            ) * <span class="nb">100.0</span> / <span class="fn">ROW_NUMBER</span>() <span class="kw">OVER</span> (<span class="kw">ORDER BY</span> started_at),
+        <span class="nb">1</span>) <span class="kw">AS</span> warn_rate_pct,
+        ...
+    <span class="kw">FROM</span> per_run
+)
+<span class="kw">SELECT</span> started_at, warn_rate_pct, error_rate_pct
+<span class="kw">FROM</span> with_rates
+<span class="kw">WHERE</span> started_at >= ?   <span class="cm">-- ← time filter applied AFTER window computation</span>
+<span class="kw">ORDER BY</span> started_at <span class="kw">ASC</span></code></pre>
+    <div class="callout callout-info">
+      <div class="callout-icon">🔑</div>
+      <div class="callout-body">
+        <strong>Why the time filter must be in the outer SELECT, not the CTE</strong>
+        <p>If <code>WHERE started_at >= ?</code> were placed inside <code>per_run</code>, the window
+        functions would only see runs from that date onwards. The cumulative sum would restart at
+        zero, making the last chart point disagree with the overview summary. By filtering <em>after</em>
+        the window computation, we show a sub-range of the global trajectory — so the final data point
+        always equals the all-time rate shown in the summary card.</p>
+      </div>
+    </div>
+
+    <h4><code>get_listings_windows()</code></h4>
+    <p>
+      Buckets runs into N-hour windows using integer epoch arithmetic in SQLite:
+      <code>(CAST(strftime('%s', ts) AS INTEGER) / window_secs) * window_secs</code>.
+      This computes the start of each window without needing any date functions on the Python side.
+    </p>
+
+    <h4><code>get_filter_breakdown()</code></h4>
+    <p>
+      Reads raw JSON strings from the <code>details</code> column, parses them in Python, and
+      accumulates rejection counts per filter name. <code>_shorten_filter_name()</code> normalises
+      raw filter <code>__repr__</code> strings for display: <code>FeeFilter(min_fee=100)</code>
+      becomes <code>FeeFilter</code>; <code>AvailabilityFilter(mode='block', periods=2)</code>
+      becomes <code>AvailabilityFilter (block)</code>; <code>AvailabilityFilter(mode='only', …)</code>
+      becomes <code>AvailabilityFilter (only)</code> — so the two modes appear as separate chart lines.
+      Legacy <code>BookedDateFilter</code> entries (from older run logs) are remapped to
+      <code>AvailabilityFilter (block)</code> for visual consistency.
+    </p>
+
+    <h3>Backend — <code>backend/alerts.py</code></h3>
+    <p>
+      Sends Telegram messages for any WARNING/ERROR/CRITICAL logs that have not yet been delivered
+      (<code>alert_sent = 0</code>). Key design decisions:
+    </p>
+    <ul>
+      <li><strong>Stop-on-failure</strong> — if a Telegram send fails (rate limit, network error), the loop breaks immediately. This prevents flooding the retry queue with messages that will all fail for the same reason.</li>
+      <li><strong>Mark-after-send</strong> — <code>alert_sent</code> is only set to 1 after the HTTP call succeeds. This ensures at-least-once delivery: if the process crashes mid-loop, the unsent alerts will be re-attempted on the next sync.</li>
+      <li><strong>Graceful no-op</strong> — if <code>TELEGRAM_TOKEN</code> is not configured, the function returns <code>False</code> immediately without raising. This allows the dashboard to run without Telegram.</li>
+    </ul>
+
+    <h3>Backend — <code>backend/scheduler.py</code></h3>
+    <p>
+      A thin wrapper around <code>APScheduler</code>'s <code>AsyncIOScheduler</code>. The sync
+      interval is read from <code>settings.sync_interval_minutes</code> (env var
+      <code>SYNC_INTERVAL_MINUTES</code>, default 5). The scheduler is started in FastAPI's
+      <code>lifespan</code> context manager and stopped gracefully on shutdown.
+    </p>
+
+    <h3>Backend — <code>backend/main.py</code></h3>
+    <p>
+      Defines all nine REST endpoints and wires together the application lifecycle. Notable patterns:
+    </p>
+    <ul>
+      <li><strong><code>@asynccontextmanager lifespan</code></strong> — the modern FastAPI approach (replacing deprecated <code>@app.on_event</code>) for startup/shutdown logic.</li>
+      <li><strong><code>_get_project()</code></strong> — a private helper that does the project lookup and raises <code>HTTPException(404)</code> in one place, keeping all route handlers DRY.</li>
+      <li><strong><code>Annotated[str | None, Query()]</code></strong> — FastAPI's type-annotated query parameter syntax, which is fully validated and documented in the auto-generated OpenAPI schema at <code>/docs</code>.</li>
+    </ul>
+
+    <h3>Frontend — <code>api/client.ts</code></h3>
+    <p>
+      A single-file API client that exports all TypeScript interfaces and a typed <code>api</code>
+      object. The generic <code>request&lt;T&gt;</code> function handles error surfacing, and all
+      methods use <code>URLSearchParams</code> to build query strings safely (no manual string
+      concatenation). This means every API call in the app goes through one auditable location.
+    </p>
+
+    <h3>Frontend — <code>App.tsx</code></h3>
+    <p>
+      The application shell. Three responsibilities:
+    </p>
+    <ul>
+      <li><strong>Theme management</strong> — <code>applyTheme()</code> sets/removes <code>document.documentElement.dataset.theme</code> and persists to <code>localStorage</code>. The dark theme is the default (no attribute); light overrides via <code>[data-theme="light"]</code> in CSS.</li>
+      <li><strong>Project selection</strong> — a dropdown that fetches the project list and lets the user switch context. The active project ID is lifted up into <code>Shell</code> state and passed down to all pages.</li>
+      <li><strong>Router structure</strong> — two routes: <code>/</code> → Dashboard, <code>/:projectId/runs/:runId</code> → RunDetail.</li>
+    </ul>
+
+    <h3>Frontend — Chart Components</h3>
+    <p>All three chart components (<code>SpeedChart</code>, <code>HealthChart</code>, <code>ListingsChart</code>) share the same structural pattern:</p>
+    <ol>
+      <li>Predefined <code>RANGES</code> array with human labels and millisecond durations.</li>
+      <li><code>useMemo</code> computes <code>{since, until}</code> ISO strings from the active range or custom date inputs.</li>
+      <li><code>useQuery</code> fetches from the API, keyed on <code>[queryKey, projectId, since, until]</code> — any date change automatically triggers a new request.</li>
+      <li>Recharts <code>ResponsiveContainer + AreaChart</code> renders the data.</li>
+      <li>Three states: loading (skeleton), empty (text message), data (chart).</li>
+    </ol>
+
+    <h3>Frontend — <code>DatePicker.tsx</code></h3>
+    <p>
+      A fully custom dropdown calendar built from scratch — no external library. Key implementation details:
+    </p>
+    <ul>
+      <li><strong>Week starts Monday</strong> — <code>(getDay() + 6) % 7</code> maps Sunday (0) to position 6, so the grid offset is Monday-based.</li>
+      <li><strong>Outside-click close</strong> — a <code>mousedown</code> listener on <code>document</code> checks <code>ref.current.contains(e.target)</code>. Only added when <code>open === true</code> and cleaned up on close (prevents listener accumulation).</li>
+      <li><strong><code>alignRight</code> prop</strong> — the "to" picker in a row would overflow the right edge of the viewport if it opened leftward. <code>alignRight</code> switches positioning to <code>right: 0</code>, pinning it to the button's right edge.</li>
+      <li><strong>Sync effect</strong> — when <code>value</code> changes externally (e.g., range buttons reset dates), a <code>useEffect</code> updates <code>viewYear</code>/<code>viewMonth</code> so the calendar shows the correct month.</li>
+    </ul>
+
+    <h3>Frontend — <code>LogStream.tsx</code></h3>
+    <p>
+      Expandable log table with level filtering. Each row is a <code>LogRow</code> that tries to
+      parse <code>log.details</code> as JSON. If parsing succeeds and the object is non-empty,
+      the row becomes clickable and reveals a <code>JsonTree</code> in an expanded row beneath.
+      This pattern avoids loading all JSON at once — only opened rows render the tree.
+    </p>
+
+    <h3>Frontend — <code>JsonTree.tsx</code></h3>
+    <p>
+      A recursive component that renders arbitrary JSON. Primitive types (<code>null</code>,
+      <code>boolean</code>, <code>number</code>, <code>string</code>) each have dedicated
+      components with semantic colour coding. Objects and arrays are <code>JsonNode</code>
+      instances that default to open at depth &lt; 2 and collapse beyond that. This is the only
+      component that uses Tailwind utility classes (instead of inline styles) because it
+      predates the design system.
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 4 — SOFTWARE BEST PRACTICES
+  ══════════════════════════════════════ -->
+  <section id="best-practices">
+    <div class="section-header">
+      <div class="section-num">04</div>
+      <div>
+        <h2>Software Engineering Best Practices</h2>
+        <p>Patterns applied throughout the codebase and why they matter.</p>
+      </div>
+    </div>
+
+    <h3>Separation of Concerns</h3>
+    <p>
+      The backend is divided into six distinct modules with clear responsibilities. No module
+      reaches into another's domain: <code>metrics.py</code> knows nothing about HTTP;
+      <code>main.py</code> knows nothing about SQL. This makes each module independently
+      testable and replaceable.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Module</th><th>Responsibility</th><th>Knows about</th></tr></thead>
+        <tbody>
+          <tr><td><code>config.py</code></td><td>Load settings</td><td>YAML, .env</td></tr>
+          <tr><td><code>db.py</code></td><td>Data persistence</td><td>SQLite, aiosqlite</td></tr>
+          <tr><td><code>sheets.py</code></td><td>External data ingestion</td><td>Google Sheets API, db.py</td></tr>
+          <tr><td><code>metrics.py</code></td><td>Analytics computation</td><td>db.py only</td></tr>
+          <tr><td><code>alerts.py</code></td><td>Notifications</td><td>httpx, db.py</td></tr>
+          <tr><td><code>scheduler.py</code></td><td>Background timing</td><td>APScheduler, sheets.py, alerts.py</td></tr>
+          <tr><td><code>main.py</code></td><td>HTTP interface</td><td>All above modules</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>DRY (Don't Repeat Yourself)</h3>
+    <ul>
+      <li><strong><code>_RUNS_CTE</code></strong> — the complex run-pivot SQL is defined once and reused by both <code>list_runs()</code> and <code>get_run()</code>.</li>
+      <li><strong><code>SELECT_COLS</code> template string</strong> — the speed query's column list is defined once, with f-string clauses for conditional where/having/limit logic.</li>
+      <li><strong><code>_get_project()</code></strong> — project validation and 404 raising is in one function, called by every route.</li>
+      <li><strong>Chart component pattern</strong> — all three charts share the same RANGES → useMemo → useQuery → AreaChart structure, reducing cognitive overhead when reading any one of them.</li>
+      <li><strong><code>api/client.ts</code></strong> — all <code>fetch</code> calls flow through the single generic <code>request&lt;T&gt;</code> function.</li>
+    </ul>
+
+    <h3>Idempotency</h3>
+    <p>
+      The sync pipeline is designed to be safe to re-run at any time without causing data corruption:
+    </p>
+    <ul>
+      <li><code>INSERT OR IGNORE</code> with a content-based dedup index on <code>(project_id, run_id, timestamp, module, function, line)</code> means inserting the same log row twice — or re-syncing after a sheet reset — has no effect.</li>
+      <li><code>sync_state</code> uses <code>INSERT ... ON CONFLICT DO UPDATE</code> (upsert) keyed on <code>(project_id, sheet_name)</code>, so updating the last-synced row for any tab is always safe regardless of prior state.</li>
+    </ul>
+
+    <h3>Type Safety</h3>
+    <p>
+      The entire frontend is TypeScript. Every API response shape has a corresponding interface
+      (<code>Run</code>, <code>Overview</code>, <code>HealthPoint</code>, etc.), so the TypeScript
+      compiler catches mismatches at build time rather than at runtime. The backend uses
+      Python type hints throughout, with <code>list[dict]</code>, <code>str | None</code>, and
+      <code>dict[str, Any]</code> return types on every function.
+    </p>
+
+    <h3>Error Handling</h3>
+    <ul>
+      <li>Backend: <code>sync_project()</code> wraps the Sheets API call in <code>try/except</code> and re-raises, letting the caller (<code>main.py</code>) convert it to an <code>HTTPException(500)</code>.</li>
+      <li>Backend: <code>alerts.py</code> catches all httpx exceptions and logs them without propagating — alert failure should never crash the sync cycle.</li>
+      <li>Frontend: TanStack Query surfaces errors in the <code>{ error }</code> field of <code>useQuery</code> — though the current UI doesn't render error states visually, the data is available for future improvement.</li>
+      <li>Frontend: JSON parsing in <code>LogRow</code> and <code>get_filter_breakdown()</code> is wrapped in <code>try/catch</code> / <code>try/except</code> to prevent a single malformed details string from breaking the entire component or query.</li>
+    </ul>
+
+    <h3>Component Composability</h3>
+    <p>
+      React components are small, single-purpose, and accept props rather than reaching into global
+      state. <code>MetricCard</code> renders one KPI from four props. <code>PhaseBreakdown</code>
+      renders a stacked bar from four millisecond values. <code>DatePicker</code> is a pure
+      controlled component — it holds no knowledge of the chart it's used in. This makes
+      each component reusable across the app.
+    </p>
+
+    <h3>Responsive Design</h3>
+    <p>
+      Layout utilities in <code>index.css</code> are defined as BEM-style utility classes
+      (<code>.oh-grid-4</code>, <code>.oh-chart-grid</code>, <code>.oh-header-inner</code>)
+      with media query breakpoints. This separates layout logic from component logic — a
+      component never needs to know its container width.
+    </p>
+
+    <div class="callout callout-tip">
+      <div class="callout-icon">✅</div>
+      <div class="callout-body">
+        <strong>One source of truth for layout breakpoints</strong>
+        <p>All responsive rules are in <code>index.css</code>. Any future component that needs
+        a 4-column-to-2-column collapse simply adds <code>className="oh-grid oh-grid-4"</code>
+        — no media queries in the component itself.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 5 — PYTHON IDIOMS
+  ══════════════════════════════════════ -->
+  <section id="python-idioms">
+    <div class="section-header">
+      <div class="section-num">05</div>
+      <div>
+        <h2>Python Best Practices &amp; Idioms</h2>
+        <p>Pythonic patterns, async techniques, and standard library usage.</p>
+      </div>
+    </div>
+
+    <h3><code>from __future__ import annotations</code></h3>
+    <p>
+      Every backend module uses this import. In Python 3.10+ it enables <em>postponed evaluation</em>
+      of annotations — type hints like <code>str | None</code> are stored as strings and evaluated
+      lazily. This means you can use newer union syntax (<code>X | Y</code>) even if the runtime
+      would otherwise reject it, and avoids circular import issues in type annotations.
+    </p>
+
+    <h3>Dataclasses for Configuration</h3>
+<pre><code><span class="dc">@dataclass</span>
+<span class="kw">class</span> <span class="cl">ProjectConfig</span>:
+    id: <span class="ty">str</span>
+    name: <span class="ty">str</span>
+    sheets_id: <span class="ty">str</span>
+    sheet_name: <span class="ty">str</span>
+    credentials_file: <span class="ty">Path</span></code></pre>
+    <p>
+      Dataclasses provide free <code>__init__</code>, <code>__repr__</code>, and
+      <code>__eq__</code> without boilerplate. Compared to <code>TypedDict</code> or plain
+      <code>dict</code>, they allow dot-access, IDE completion, and type checking. The
+      <code>Path</code> type for <code>credentials_file</code> is more correct than <code>str</code>
+      — it makes the type's intent explicit and enables path operations without casting.
+    </p>
+
+    <h3>Async Context Manager for Database Connections</h3>
+<pre><code><span class="dc">@asynccontextmanager</span>
+<span class="kw">async def</span> <span class="fn">get_db</span>():
+    <span class="kw">async with</span> aiosqlite.connect(DB_PATH) <span class="kw">as</span> db:
+        db.row_factory = aiosqlite.Row
+        <span class="kw">yield</span> db</code></pre>
+    <p>
+      The <code>@asynccontextmanager</code> decorator turns a generator into an async context
+      manager. Every caller writes <code>async with get_db() as db:</code> — the connection is
+      automatically opened and closed around the body. This is the Python-async equivalent of
+      RAII (resource acquisition is initialisation).
+    </p>
+
+    <h3>Walrus Operator Avoidance (Readability First)</h3>
+    <p>
+      While Python 3.8+ supports the walrus operator (<code>:=</code>), the codebase
+      intentionally avoids it in complex SQL result processing. A clear two-step approach
+      (<code>rows = await ...; return [dict(r) for r in rows]</code>) is preferred over
+      clever one-liners that obscure the data flow.
+    </p>
+
+    <h3>Type Guards and Optional Chaining</h3>
+<pre><code>avg_listed = (
+    round(listed_row[0]["avg_listed"])
+    <span class="kw">if</span> listed_row <span class="kw">and</span> listed_row[0]["avg_listed"] <span class="kw">is not None</span>
+    <span class="kw">else</span> <span class="ty">None</span>
+)</code></pre>
+    <p>
+      Rather than trying to call <code>round()</code> on a potentially-None value and catching
+      <code>TypeError</code>, the code explicitly guards both the row's existence and the
+      value's non-nullness. This is Pythonic: explicit is better than implicit.
+    </p>
+
+    <h3>Statistics Module for In-Process Aggregation</h3>
+<pre><code><span class="kw">import</span> statistics
+
+speeds = [r["ms"] <span class="kw">for</span> r <span class="kw">in</span> speed_rows <span class="kw">if</span> r["ms"] <span class="kw">is not None</span>]
+speed_stats = {
+    "avg_ms":    round(statistics.mean(speeds)),
+    "median_ms": round(statistics.median(speeds)),
+}</code></pre>
+    <p>
+      The standard library's <code>statistics</code> module provides correct, readable mean and
+      median. For small lists (a few hundred run times), this is far simpler than adding
+      dependencies like NumPy or computing everything in SQL.
+    </p>
+
+    <h3>ZoneInfo for Timezone-Correct Date Arithmetic</h3>
+<pre><code><span class="kw">from</span> zoneinfo <span class="kw">import</span> ZoneInfo, ZoneInfoNotFoundError
+
+<span class="kw">try</span>:
+    zone = ZoneInfo(tz)
+<span class="kw">except</span> ZoneInfoNotFoundError:
+    zone = timezone.utc
+
+midnight_local = datetime.now(zone).replace(
+    hour=<span class="nb">0</span>, minute=<span class="nb">0</span>, second=<span class="nb">0</span>, microsecond=<span class="nb">0</span>
+)
+today = midnight_local.astimezone(timezone.utc).strftime(<span class="st">"%Y-%m-%dT%H:%M:%S.000Z"</span>)</code></pre>
+    <p>
+      <code>ZoneInfo</code> (Python 3.9+) is the modern, standard-library way to handle
+      IANA timezone data. The pattern: get local midnight, convert to UTC, format as ISO string.
+      The fallback to <code>timezone.utc</code> on unknown timezone strings makes the function
+      robust against client-sent bogus values.
+    </p>
+
+    <h3>List Unpacking and Spread in Parameters</h3>
+<pre><code>rows = await db.execute_fetchall(
+    sql, [project_id, run_id, *levels]  <span class="cm"># spread levels into param list</span>
+)</code></pre>
+    <p>
+      Using <code>*levels</code> inside a list literal to build a flat parameter array is
+      idiomatic Python — far cleaner than building the list with concatenation.
+    </p>
+
+    <h3>f-strings with Conditional Clauses</h3>
+<pre><code>filter_extra = <span class="st">"AND started_at &lt;= ?"</span> <span class="kw">if</span> until <span class="kw">else</span> <span class="st">""</span>
+params = [project_id, since]
+<span class="kw">if</span> until:
+    params.append(until)
+
+sql = <span class="st">f"""
+SELECT ... FROM with_rates
+WHERE started_at >= ? {filter_extra}
+"""</span></code></pre>
+    <p>
+      Conditional SQL clauses are built by computing a string fragment early and embedding it
+      in the f-string. This avoids deeply nested if/else branching or string concatenation.
+      The parameter list is built in parallel, keeping positions consistent.
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 6 — PERFORMANCE
+  ══════════════════════════════════════ -->
+  <section id="performance">
+    <div class="section-header">
+      <div class="section-num">06</div>
+      <div>
+        <h2>Performance Optimisations</h2>
+        <p>Where the system is fast, why, and where the headroom is.</p>
+      </div>
+    </div>
+
+    <h3>SQLite Indices</h3>
+    <p>
+      Four indices are created at startup covering every production query access pattern:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Index</th><th>Columns</th><th>Queries served</th></tr></thead>
+        <tbody>
+          <tr><td><code>idx_logs_project_run</code></td><td><code>(project_id, run_id)</code></td><td>Run detail, run logs, all per-run aggregations</td></tr>
+          <tr><td><code>idx_logs_project_ts</code></td><td><code>(project_id, timestamp)</code></td><td>Time-range filtering in metrics</td></tr>
+          <tr><td><code>idx_logs_level</code></td><td><code>(project_id, level)</code></td><td>Health rate, warning/error counts</td></tr>
+          <tr><td><code>idx_logs_alert</code></td><td><code>(project_id, alert_sent, level)</code></td><td>Unsent alert query (covering index)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The alert index is a <em>covering index</em> — the query
+      <code>WHERE project_id = ? AND alert_sent = 0 AND level IN (...)</code>
+      can be answered entirely from the index without touching the main table rows.
+    </p>
+
+    <h3>Incremental Sync</h3>
+    <p>
+      Every sync call transfers only new rows from each Google Sheets tab (tracked by row number
+      per tab in <code>sync_state</code>). A project with 10 000 historical log lines spread across
+      multiple rotated tabs doesn't pay the cost of re-reading them on every sync. Only the delta
+      — typically 20–100 rows per run — is transferred, parsed, and inserted. Content-based
+      deduplication provides an additional safety net: even if <code>last_row</code> is reset or a
+      tab is cleared and reused, no duplicate rows enter the database.
+    </p>
+
+    <h3>Batch Insert with <code>executemany</code></h3>
+<pre><code><span class="kw">await</span> db.executemany(
+    <span class="st">"INSERT OR IGNORE INTO logs ..."</span>,
+    rows  <span class="cm"># list of dicts — all rows in one round-trip</span>
+)</code></pre>
+    <p>
+      A single <code>executemany</code> call wraps all new rows in one database transaction,
+      avoiding the overhead of per-row <code>BEGIN/COMMIT</code> cycles.
+    </p>
+
+    <h3>React Query Caching</h3>
+    <p>
+      TanStack Query caches every API response by its query key. Multiple components
+      asking for the same data (e.g., both the overview and chart components running
+      simultaneously) will share one cached result — no duplicate network requests.
+      The <code>refetchInterval: 60_000</code> setting keeps the dashboard live without
+      the user having to manually refresh.
+    </p>
+
+    <h3>useMemo for Derived State</h3>
+<pre><code><span class="kw">const</span> { since, until } = useMemo(() => {
+  <span class="kw">if</span> (range === <span class="st">"Custom"</span>) {
+    <span class="kw">return</span> { since: customFrom ? toISODate(customFrom) : undefined, ... };
+  }
+  <span class="kw">const</span> ms = RANGES.find((r) => r.label === range)!.ms;
+  <span class="kw">return</span> { since: <span class="kw">new</span> Date(Date.now() - ms).toISOString(), until: undefined };
+}, [range, customFrom, customTo]);</code></pre>
+    <p>
+      <code>useMemo</code> ensures the <code>since</code>/<code>until</code> strings are only
+      recomputed when the relevant state changes. Without it, every render would recompute
+      the date strings and potentially trigger unnecessary query refetches.
+    </p>
+
+    <h3>Dynamic SQL Template Strings</h3>
+    <p>
+      The <code>SELECT_COLS</code> pattern in <code>get_speed_series()</code> avoids duplicating
+      a 15-line SQL select list for the since/until vs limit cases. At a performance level,
+      this is negligible — but it also reduces the chance of the two paths diverging silently,
+      which would be a correctness bug masquerading as a performance issue.
+    </p>
+
+    <h3>requestAnimationFrame for Enter Animations</h3>
+<pre><code>useEffect(() => {
+  <span class="kw">const</span> id = requestAnimationFrame(() => setAnimated(<span class="kw">true</span>));
+  <span class="kw">return</span> () => cancelAnimationFrame(id);
+}, []);</code></pre>
+    <p>
+      <code>FilterBreakdown</code> and <code>PhaseBreakdown</code> use
+      <code>requestAnimationFrame</code> to trigger their CSS transitions on the next paint
+      frame. Setting animated state synchronously in <code>useEffect</code> would race with
+      the browser paint and may not show the animation. RAF defers until the browser is ready
+      to paint, guaranteeing a visible transition.
+    </p>
+
+    <h3>Window Function Computation at the Database Layer</h3>
+    <p>
+      Computing cumulative rates entirely in SQL — rather than fetching all rows and aggregating
+      in Python — keeps the data transfer minimal. For a project with 2 000 runs, the database
+      returns at most 2 000 rows for the health chart, each with two pre-computed percentages.
+      A Python loop over all log entries would be orders of magnitude more expensive.
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 7 — PRODUCT DEVELOPMENT
+  ══════════════════════════════════════ -->
+  <section id="product">
+    <div class="section-header">
+      <div class="section-num">07</div>
+      <div>
+        <h2>Product Development Lessons</h2>
+        <p>What the iterative development process revealed about building tools you use yourself.</p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">01</div>
+      <div class="lesson-body">
+        <h4>A metric that can't be compared to something else is almost useless</h4>
+        <p>
+          The original health chart showed per-hour bucket rates (e.g., "20% of runs in the
+          5pm hour had warnings"). That number is hard to act on in isolation. The breakthrough
+          was realising the <em>summary card number</em> — the all-time rate — is the benchmark
+          every user is already anchored to. Changing the chart to show cumulative trajectory
+          made both values coherent and mutually reinforcing.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">02</div>
+      <div class="lesson-body">
+        <h4>The last data point on a chart should equal the summary number</h4>
+        <p>
+          If a dashboard shows "Warning rate: 8.9%" in a card, and the chart line ends at 11.2%,
+          users lose trust in both numbers. Investing in making these two sources agree — via the
+          outer-WHERE fix in the SQL window function — is not just a technical fix; it's a
+          <em>trust restoration</em> that makes the whole dashboard credible.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">03</div>
+      <div class="lesson-body">
+        <h4>Remove features that don't earn their space</h4>
+        <p>
+          The Pipeline Funnel chart was removed when it became clear that the same data was
+          visible in the run table's "Funnel" column. Every UI element competes for attention.
+          Removing the funnel made the Speed Chart more prominent and the page less cluttered.
+          Good product design is as much about deletion as addition.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">04</div>
+      <div class="lesson-body">
+        <h4>Native inputs break your design system</h4>
+        <p>
+          The native <code>&lt;input type="date"&gt;</code> rendered differently on every OS,
+          ignored all custom CSS, and clashed visually with the rest of the dashboard. The custom
+          <code>DatePicker</code> dropdown took ~200 lines but delivered a component that matches
+          the design system exactly, handles min/max constraints, and behaves the same across
+          all browsers. For user-facing tools you control end-to-end, owning the interaction is
+          often worth the cost.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">05</div>
+      <div class="lesson-body">
+        <h4>Filter-ability is a first-class feature, not an afterthought</h4>
+        <p>
+          Adding run-level filter buttons (All / OK / Warn / Error / Critical) with live counts
+          turned the runs table from a data dump into an actionable triage interface. Users can
+          go directly to "show me all error runs" in one click. Design filtering into your data
+          tables from the start.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">06</div>
+      <div class="lesson-body">
+        <h4>Consistency in UI state matters more than any individual component</h4>
+        <p>
+          When some filter chips were highlighted and others weren't, users couldn't tell if the
+          highlighting was meaningful or accidental. Making all chips use the same base style —
+          with only the active chip's count badge changing colour — eliminated the confusion.
+          Inconsistent visual states create cognitive noise even when the underlying data is correct.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">07</div>
+      <div class="lesson-body">
+        <h4>The most useful sort order is usually not chronological</h4>
+        <p>
+          Rejected gigs sorted by timestamp are a random walk. Sorted by fee descending,
+          the most financially significant rejections appear first — immediately answering
+          "am I losing well-paid opportunities to this filter?" A simple sort comparator
+          changed the table from a log into a decision-support tool.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">08</div>
+      <div class="lesson-body">
+        <h4>Auto-refresh is the difference between a dashboard and a report</h4>
+        <p>
+          The 60-second <code>refetchInterval</code> on all queries means the dashboard stays
+          current without user action. This is the defining characteristic of an operational
+          dashboard vs a static report — you can leave it open on a second monitor and trust
+          it always shows the current state.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 8 — GLOSSARY
+  ══════════════════════════════════════ -->
+  <section id="glossary">
+    <div class="section-header">
+      <div class="section-num">08</div>
+      <div>
+        <h2>Concepts Glossary</h2>
+        <p>Technical terms used in the codebase, explained plainly.</p>
+      </div>
+    </div>
+
+    <div class="glossary-term">
+      <div class="g-term">aiosqlite</div>
+      <div class="g-def">An async wrapper around Python's built-in <code>sqlite3</code> module. It offloads database I/O to a thread pool so SQLite queries don't block FastAPI's event loop.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">APScheduler</div>
+      <div class="g-def">Advanced Python Scheduler — a job scheduling library. The <code>AsyncIOScheduler</code> variant integrates with Python's <code>asyncio</code> event loop, allowing scheduled async coroutines without a separate thread.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Common Table Expression (CTE)</div>
+      <div class="g-def">A named temporary result set defined with <code>WITH name AS (...)</code> before the main query. Useful for breaking complex queries into readable steps, and for referring to the same derived table multiple times.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Conditional Aggregation</div>
+      <div class="g-def">Using <code>MAX(CASE WHEN condition THEN value END)</code> inside a <code>GROUP BY</code> query to pivot multiple log rows for the same <code>run_id</code> into a single summary row with multiple fields.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Covering Index</div>
+      <div class="g-def">A database index that contains all columns referenced by a query, so the database can answer the query entirely from the index without reading the main table. Eliminates a secondary lookup step.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">CSS Custom Properties</div>
+      <div class="g-def">Variables defined in CSS using <code>--name: value</code> syntax and referenced with <code>var(--name)</code>. Changing one property on <code>:root</code> or a parent element cascades to all children that use that variable — the foundation of the theming system.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Idempotent</div>
+      <div class="g-def">An operation that produces the same result whether it is applied once or many times. <code>INSERT OR IGNORE</code> is idempotent — inserting the same row repeatedly is harmless.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Incremental Sync</div>
+      <div class="g-def">Fetching only new data since the last successful sync, rather than re-fetching the entire dataset. The <code>sync_state</code> table records the last synced row number per sheet tab (<code>project_id</code> + <code>sheet_name</code> composite key) to make this possible across multiple rotated log tabs.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Lifespan Context Manager</div>
+      <div class="g-def">FastAPI's mechanism for startup/shutdown logic. Code before <code>yield</code> runs on startup; code after runs on shutdown. Replaces the deprecated <code>@app.on_event("startup")</code> pattern.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">requestAnimationFrame</div>
+      <div class="g-def">A browser API that schedules a callback to run just before the next repaint. Used in React components to trigger CSS animations on mount — guarantees the element has been painted at its initial state before the transition begins.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Row Factory</div>
+      <div class="g-def">A function assigned to <code>db.row_factory</code> that transforms raw database rows. Setting it to <code>aiosqlite.Row</code> makes rows dict-like: accessible by column name (<code>row["column"]</code>) instead of numeric index.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Service Account</div>
+      <div class="g-def">A Google Cloud identity used by applications (not users) to access APIs. The dashboard uses a service account JSON key to authenticate with Google Sheets API without user interaction.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">TanStack Query</div>
+      <div class="g-def">A React library for managing server state. It provides automatic caching, background refetching, loading/error states, and query invalidation — replacing manual useEffect + fetch patterns.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">useMemo</div>
+      <div class="g-def">A React hook that memoizes a computed value, recalculating it only when its declared dependencies change. Prevents unnecessary recomputation on every render.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">URLSearchParams</div>
+      <div class="g-def">A browser/Node.js API for building URL query strings. Handles encoding special characters and <code>&amp;</code> separators automatically — safer than manual string concatenation.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Upsert</div>
+      <div class="g-def">An operation that inserts a row if it doesn't exist, or updates it if it does. SQLite syntax: <code>INSERT INTO ... ON CONFLICT(pk) DO UPDATE SET ...</code>. Used for <code>sync_state</code> to atomically update the last-synced row.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Vite Proxy</div>
+      <div class="g-def">A Vite dev server feature that forwards requests matching a path prefix to another server. The <code>'/api': 'http://localhost:8000'</code> proxy lets the React frontend make <code>/api</code> calls without CORS issues during development.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">Window Function (SQL)</div>
+      <div class="g-def">A SQL function that computes a value across a set of rows related to the current row, without collapsing them into a group. <code>SUM(...) OVER (ORDER BY ts ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)</code> is a running total — the value at each row is the sum of all preceding rows including itself.</div>
+    </div>
+    <div class="glossary-term">
+      <div class="g-term">ZoneInfo</div>
+      <div class="g-def">Python's standard library (3.9+) for IANA timezone database access. Replaces the <code>pytz</code> third-party library. Used to correctly compute "midnight in the user's local timezone" for the "runs today" metric.</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 9 — ROADMAP
+  ══════════════════════════════════════ -->
+  <section id="roadmap">
+    <div class="section-header">
+      <div class="section-num">09</div>
+      <div>
+        <h2>Future Features &amp; Growth Roadmap</h2>
+        <p>What comes next — ranked by value, complexity, and learning opportunity.</p>
+      </div>
+    </div>
+
+    <h3>Near-Term (Low Effort, High Value)</h3>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#eef2ff;">📊</div>
+      <div class="roadmap-body">
+        <h4>Pagination on Runs Table</h4>
+        <p>The current limit is 50 runs. An offset-based or cursor-based pagination control would expose the full history without performance risk. The API already supports <code>limit</code> and <code>offset</code> query params.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-emerald">Backend ready</span>
+          <span class="badge badge-amber">Frontend work needed</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#f0fdf4;">🔔</div>
+      <div class="roadmap-body">
+        <h4>Alert Threshold Configuration</h4>
+        <p>Currently all WARNING/ERROR/CRITICAL logs trigger alerts. Add configurable thresholds: "only alert if error rate exceeds 20% over the last 5 runs". This reduces noise from one-off errors.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-indigo">Medium complexity</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#fffbeb;">🔍</div>
+      <div class="roadmap-body">
+        <h4>Log Search</h4>
+        <p>A full-text search bar across log messages and JSON details. SQLite's FTS5 extension provides blazing-fast full-text search without needing Elasticsearch.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-amber">Moderate complexity</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#f0fdf4;">📤</div>
+      <div class="roadmap-body">
+        <h4>CSV Export</h4>
+        <p>A "Download CSV" button on the runs table and any chart's data. Enables offline analysis in spreadsheets without writing custom queries.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-emerald">Low complexity</span>
+        </div>
+      </div>
+    </div>
+
+    <h3>Medium-Term (Significant Engineering)</h3>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#eef2ff;">🏗️</div>
+      <div class="roadmap-body">
+        <h4>Multi-Project Comparison</h4>
+        <p>Currently the project selector switches context — you can't see two projects side by side. A comparison view would overlay charts from multiple projects on the same axis.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-red">High complexity</span>
+          <span class="badge badge-sky">High value</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#fff1f2;">⚡</div>
+      <div class="roadmap-body">
+        <h4>Webhook / Push Sync</h4>
+        <p>Rather than polling Google Sheets every N minutes, organist_bot could POST to a webhook endpoint immediately after each run. This would make the dashboard near-real-time (seconds, not minutes) and reduce redundant API calls.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-red">Requires bot change</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#f0fdf4;">🧪</div>
+      <div class="roadmap-body">
+        <h4>Automated Test Suite</h4>
+        <p>Add <code>pytest</code> unit tests for all metric functions using an in-memory SQLite fixture. Add Vitest component tests for the chart components and DatePicker. Currently all testing is manual.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-amber">Moderate complexity</span>
+          <span class="badge badge-sky">High reliability value</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#fffbeb;">📱</div>
+      <div class="roadmap-body">
+        <h4>Progressive Web App (PWA)</h4>
+        <p>Add a service worker, <code>manifest.json</code>, and offline caching so the dashboard can be installed on mobile and shows cached data when offline. Particularly useful for checking overnight run results on a phone.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-amber">Moderate complexity</span>
+        </div>
+      </div>
+    </div>
+
+    <h3>Long-Term (Architecture Evolution)</h3>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#eef2ff;">🌐</div>
+      <div class="roadmap-body">
+        <h4>Generic Log Ingestion API</h4>
+        <p>Rather than being locked to Google Sheets, expose a <code>POST /api/ingest</code> endpoint that accepts JSON log lines. Any project can send logs directly, making this a general-purpose observability platform rather than organist_bot-specific.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-red">Major architecture change</span>
+          <span class="badge badge-sky">Massive generality gain</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#f0fdf4;">🤖</div>
+      <div class="roadmap-body">
+        <h4>Anomaly Detection</h4>
+        <p>Use rolling standard deviation to flag runs where speed, listing count, or error rate is statistically abnormal. Highlight anomalous runs in the table with a distinct visual indicator. Could use Python's <code>statistics.stdev()</code> or a simple Z-score threshold.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-red">Algorithmic complexity</span>
+          <span class="badge badge-sky">Proactive value</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="roadmap-item">
+      <div class="roadmap-icon" style="background:#fff1f2;">☁️</div>
+      <div class="roadmap-body">
+        <h4>Cloud Deployment</h4>
+        <p>Containerise with Docker Compose (FastAPI service + Caddy/Nginx for the Vite build). Deploy to a small VPS or cloud instance. Replace SQLite with PostgreSQL for multi-writer safety. Add authentication (JWT or OAuth2) before exposing publicly.</p>
+        <div class="roadmap-meta">
+          <span class="badge badge-red">Infra complexity</span>
+          <span class="badge badge-emerald">Production-ready</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SECTION 10 — CAREER TAKEAWAYS
+  ══════════════════════════════════════ -->
+  <section id="career">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <div>
+        <h2>Key Takeaways for Career Growth</h2>
+        <p>What building this project teaches you about engineering at a higher level.</p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">01</div>
+      <div class="lesson-body">
+        <h4>SQL window functions are the single most underused professional skill</h4>
+        <p>
+          Most developers reach for Python/JavaScript to compute running totals, moving averages,
+          and rankings — but SQL can do this with zero data transfer to the application layer.
+          Knowing window functions (<code>SUM OVER</code>, <code>ROW_NUMBER OVER</code>,
+          <code>LAG</code>, <code>LEAD</code>, <code>RANK</code>) puts you in the top 10%
+          of SQL practitioners and solves problems that would otherwise require complex application
+          code or specialised analytics tools.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">02</div>
+      <div class="lesson-body">
+        <h4>Build the monitoring layer before you need it</h4>
+        <p>
+          This dashboard was built because organist_bot was already running blindly. In professional
+          settings, observability (logging, metrics, tracing) should be designed alongside the feature,
+          not retrofitted after problems emerge. The cost of instrumentation is low when you're
+          building; the cost of debugging a production incident without it is very high.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">03</div>
+      <div class="lesson-body">
+        <h4>Async Python is a career-differentiating skill</h4>
+        <p>
+          FastAPI with <code>async</code>/<code>await</code> and <code>aiosqlite</code> represents
+          modern Python backend development. Understanding event loops, coroutines, context managers,
+          and how to combine sync and async code without blocking the event loop is increasingly
+          required for high-performance Python services at scale.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">04</div>
+      <div class="lesson-body">
+        <h4>TypeScript pays dividends at refactoring time</h4>
+        <p>
+          When the <code>HealthPoint</code> interface changed (dropping <code>hour</code>, adding
+          <code>started_at</code>), the TypeScript compiler immediately flagged every component
+          that consumed the old shape. Without types, this would have been a silent runtime bug.
+          Strong types are not overhead — they're free documentation and an automated regression
+          test for your data contracts.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">05</div>
+      <div class="lesson-body">
+        <h4>Separation of concerns is the foundation of maintainability</h4>
+        <p>
+          The clean module boundaries in this codebase mean that swapping Google Sheets for a
+          Webhook API requires changes only to <code>sheets.py</code> and
+          <code>scheduler.py</code> — nothing in <code>metrics.py</code>, <code>main.py</code>,
+          or the frontend changes. Professional codebases that don't have this separation become
+          unmaintainable. The discipline of asking "does this module need to know about X?"
+          is a habit worth cultivating from day one.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">06</div>
+      <div class="lesson-body">
+        <h4>Server state management is a solved problem — use the library</h4>
+        <p>
+          Implementing <code>useEffect + fetch + useState</code> for async data is error-prone:
+          race conditions, stale closures, missing loading states, and no caching. TanStack Query
+          solves all of this. Knowing which problems have canonical library solutions — and reaching
+          for those libraries instead of re-implementing them — is a hallmark of senior engineering.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">07</div>
+      <div class="lesson-body">
+        <h4>The feedback loop between using your own tool and improving it is irreplaceable</h4>
+        <p>
+          Every iteration of this dashboard was driven by using it and noticing something that
+          felt wrong: the Y-axis stopping at 100% when all rates were under 5%. The "00:00"
+          timestamps cluttering the listings X-axis. The filter buttons that were sometimes
+          highlighted for no apparent reason. Dogfooding — using what you build — produces
+          product insights that no specification document can anticipate. Build tools you
+          actually use.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">08</div>
+      <div class="lesson-body">
+        <h4>Incremental delivery beats big-bang releases</h4>
+        <p>
+          This dashboard was built one chart, one metric, one fix at a time — each iteration
+          immediately testable and useful. The temptation in personal projects is to plan a
+          "complete" version before writing any code. The reality is that the most valuable
+          insights about what to build come from the act of using an incomplete version.
+          Ship early, iterate fast.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">09</div>
+      <div class="lesson-body">
+        <h4>Configuration and secrets management is non-negotiable from day one</h4>
+        <p>
+          Using <code>python-dotenv</code> and a <code>projects.yaml</code> config file from
+          the start means: (a) no hardcoded credentials in source code, (b) easy environment
+          switching (dev/prod), and (c) the project is git-safe by design. Professional
+          environments enforce this at the CI level. Building the habit in personal projects
+          means it becomes natural.
+        </p>
+      </div>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-num">10</div>
+      <div class="lesson-body">
+        <h4>Polished UX is an engineering skill, not just a designer's job</h4>
+        <p>
+          The animated bar chart transitions, the DatePicker calendar, the smooth theme crossfade,
+          the colour-coded timing indicators in the runs table — none of these required a designer.
+          They required understanding CSS transitions, requestAnimationFrame, and thinking carefully
+          about what information each visual element communicates. Engineers who care about polish
+          ship products that people trust and enjoy using. That trust translates directly into
+          whether a tool gets adopted or abandoned.
+        </p>
+      </div>
+    </div>
+
+    <div class="callout callout-tip">
+      <div class="callout-icon">🚀</div>
+      <div class="callout-body">
+        <strong>The meta-lesson</strong>
+        <p>
+          You built a full-stack product: backend API, SQL analytics, external API integration,
+          async background processing, Telegram notifications, responsive React frontend, custom
+          UI components, theming, and interactive charting. This is not a tutorial project —
+          it is a real system solving a real operational problem. That experience transfers
+          directly to professional product engineering.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">
+    <p>Observability Dashboard · Technical Report · March 2026</p>
+    <p style="margin-top:6px;">Generated from source analysis of <code>backend/</code> (6 modules, ~700 LOC) and <code>frontend/src/</code> (12 components, ~2 400 LOC)</p>
+  </div>
+
+</main>
+</div>
+</body>
+</html>
