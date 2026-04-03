@@ -473,7 +473,7 @@
       </div>
       <div class="cover-meta-item">
         <span class="cover-meta-label">Report Date</span>
-        <span class="cover-meta-value">March 2026</span>
+        <span class="cover-meta-value">April 2026</span>
       </div>
     </div>
   </div>
@@ -529,25 +529,25 @@
       <div class="card">
         <div class="accent-bar" style="background:var(--indigo);"></div>
         <div class="card-label">Backend Lines</div>
-        <div class="card-value">~700</div>
-        <div class="card-sub">Python across 6 modules</div>
+        <div class="card-value">~1 300</div>
+        <div class="card-sub">Python across 7 modules</div>
       </div>
       <div class="card">
         <div class="accent-bar" style="background:var(--cyan);"></div>
         <div class="card-label">Frontend Lines</div>
-        <div class="card-value">~2 400</div>
-        <div class="card-sub">TypeScript/TSX across 12 files</div>
+        <div class="card-value">~2 800</div>
+        <div class="card-sub">TypeScript/TSX across 16 files</div>
       </div>
       <div class="card">
         <div class="accent-bar" style="background:var(--emerald);"></div>
         <div class="card-label">API Endpoints</div>
-        <div class="card-value">9</div>
+        <div class="card-value">12</div>
         <div class="card-sub">REST endpoints, all async</div>
       </div>
       <div class="card">
         <div class="accent-bar" style="background:var(--amber);"></div>
         <div class="card-label">React Components</div>
-        <div class="card-value">12</div>
+        <div class="card-value">16</div>
         <div class="card-sub">All functional with hooks</div>
       </div>
     </div>
@@ -716,6 +716,7 @@
             ├── <span class="ft-ts">ListingsChart.tsx</span>   <span class="ft-cm"># Avg gigs per day chart</span>
             ├── <span class="ft-ts">DatePicker.tsx</span>      <span class="ft-cm"># Custom dropdown calendar</span>
             ├── <span class="ft-ts">FilterBreakdown.tsx</span> <span class="ft-cm"># Animated bar chart of filters</span>
+            ├── <span class="ft-ts">FunnelChart.tsx</span>     <span class="ft-cm"># Scrape → filter → notify funnel chart</span>
             ├── <span class="ft-ts">RunsTable.tsx</span>       <span class="ft-cm"># Paginated run table with status pills</span>
             ├── <span class="ft-ts">LogStream.tsx</span>       <span class="ft-cm"># Expandable log table with level filter</span>
             ├── <span class="ft-ts">PhaseBreakdown.tsx</span>  <span class="ft-cm"># Stacked timing bar</span>
@@ -794,7 +795,7 @@
 
     <h3>Backend — <code>backend/metrics.py</code></h3>
     <p>
-      The analytical core of the backend. Contains five async functions, each returning structured
+      The analytical core of the backend. Contains seven async functions, each returning structured
       data for a specific chart or KPI section. No HTTP logic lives here — it is purely a
       data-transformation layer.
     </p>
@@ -884,6 +885,27 @@ with_rates <span class="kw">AS</span> (
       <code>AvailabilityFilter (block)</code> for visual consistency.
     </p>
 
+    <h4><code>get_filter_breakdown_series()</code></h4>
+    <p>
+      The time-series companion to <code>get_filter_breakdown()</code>. Instead of all-time
+      averages, it returns per-run rejection counts within a date window, shaped as a pivot table
+      for Recharts: <code>{"{"}"filters": ["FeeFilter", …], "series": [{"{"}"started_at": …, "FeeFilter": 5, …{"}"}, …]{"}"}</code>.
+      The pivot is computed in Python (not SQL) by iterating over parsed JSON from each run's
+      <code>filter_breakdown</code> detail. The <code>HAVING</code> clause restricts to runs that
+      actually have filter breakdown data, excluding partial or aborted runs.
+    </p>
+
+    <h4><code>get_funnel()</code></h4>
+    <p>
+      Builds the listing pipeline funnel (listed → pre-filter passed → scraped → valid → notified)
+      for the most recent N runs. Uses conditional aggregation on specific log message strings
+      (<code>'Scraping complete'</code>, <code>'Filtering complete'</code>, <code>'Run summary'</code>)
+      to extract counts from the <code>details</code> JSON column. Results are returned in
+      chronological order via a post-fetch <code>list.reverse()</code>. The corresponding
+      <code>FunnelChart.tsx</code> component is implemented but not currently rendered on any
+      page — the same counts are visible in the run table's funnel column.
+    </p>
+
     <h3>Backend — <code>backend/alerts.py</code></h3>
     <p>
       Sends Telegram messages for any WARNING/ERROR/CRITICAL logs that have not yet been delivered
@@ -905,7 +927,7 @@ with_rates <span class="kw">AS</span> (
 
     <h3>Backend — <code>backend/main.py</code></h3>
     <p>
-      Defines all nine REST endpoints and wires together the application lifecycle. Notable patterns:
+      Defines all twelve REST endpoints and wires together the application lifecycle. Notable patterns:
     </p>
     <ul>
       <li><strong><code>@asynccontextmanager lifespan</code></strong> — the modern FastAPI approach (replacing deprecated <code>@app.on_event</code>) for startup/shutdown logic.</li>
@@ -985,7 +1007,7 @@ with_rates <span class="kw">AS</span> (
 
     <h3>Separation of Concerns</h3>
     <p>
-      The backend is divided into six distinct modules with clear responsibilities. No module
+      The backend is divided into seven distinct modules with clear responsibilities. No module
       reaches into another's domain: <code>metrics.py</code> knows nothing about HTTP;
       <code>main.py</code> knows nothing about SQL. This makes each module independently
       testable and replaceable.
@@ -1210,7 +1232,7 @@ WHERE started_at >= ? {filter_extra}
 
     <h3>SQLite Indices</h3>
     <p>
-      Four indices are created at startup covering every production query access pattern:
+      Five indices are created at startup covering every production query access pattern:
     </p>
     <div class="table-wrap">
       <table>
@@ -1220,6 +1242,7 @@ WHERE started_at >= ? {filter_extra}
           <tr><td><code>idx_logs_project_ts</code></td><td><code>(project_id, timestamp)</code></td><td>Time-range filtering in metrics</td></tr>
           <tr><td><code>idx_logs_level</code></td><td><code>(project_id, level)</code></td><td>Health rate, warning/error counts</td></tr>
           <tr><td><code>idx_logs_alert</code></td><td><code>(project_id, alert_sent, level)</code></td><td>Unsent alert query (covering index)</td></tr>
+          <tr><td><code>idx_logs_dedup</code> (UNIQUE)</td><td><code>(project_id, run_id, timestamp, module, function, line)</code></td><td>Content-based deduplication; enforces <code>INSERT OR IGNORE</code> idempotency</td></tr>
         </tbody>
       </table>
     </div>
@@ -1346,9 +1369,11 @@ WHERE started_at >= ? {filter_extra}
       <div class="lesson-body">
         <h4>Remove features that don't earn their space</h4>
         <p>
-          The Pipeline Funnel chart was removed when it became clear that the same data was
-          visible in the run table's "Funnel" column. Every UI element competes for attention.
-          Removing the funnel made the Speed Chart more prominent and the page less cluttered.
+          The Pipeline Funnel chart was removed from the Dashboard page when it became clear
+          that the same data was visible in the run table's "Funnel" column. Every UI element
+          competes for attention. Removing the chart made the Speed Chart more prominent and
+          the page less cluttered. The <code>FunnelChart.tsx</code> component and its backend
+          endpoint (<code>/metrics/funnel</code>) are retained for future use.
           Good product design is as much about deletion as addition.
         </p>
       </div>
@@ -1827,8 +1852,8 @@ WHERE started_at >= ? {filter_extra}
   </section>
 
   <div class="footer">
-    <p>Observability Dashboard · Technical Report · March 2026</p>
-    <p style="margin-top:6px;">Generated from source analysis of <code>backend/</code> (6 modules, ~700 LOC) and <code>frontend/src/</code> (12 components, ~2 400 LOC)</p>
+    <p>Observability Dashboard · Technical Report · April 2026</p>
+    <p style="margin-top:6px;">Generated from source analysis of <code>backend/</code> (7 modules, ~1 300 LOC) and <code>frontend/src/</code> (16 files, ~2 800 LOC)</p>
   </div>
 
 </main>
