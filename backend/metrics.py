@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 import statistics
+from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -473,15 +475,12 @@ _FEE_BANDS: list[tuple[str, int, int]] = [
     ("£51–100", 51, 100),
     ("£101–150", 101, 150),
     ("£151–200", 151, 200),
-    ("£201–299", 201, 299),
-    ("£301+", 300, 10_000),
+    ("£201–300", 201, 300),
+    ("£301+", 301, 10_000),
 ]
 
 
 async def get_fee_distribution(project_id: str) -> list[dict[str, Any]]:
-    import re
-    from collections import Counter
-
     async with get_db() as db:
         rows = await db.execute_fetchall(
             """

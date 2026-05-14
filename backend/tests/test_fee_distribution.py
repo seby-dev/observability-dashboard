@@ -64,7 +64,7 @@ async def test_null_fee_skipped():
 
 @pytest.mark.asyncio
 async def test_bands_ordered_low_to_high():
-    rows = [{"fee": "£300"}, {"fee": "£50"}, {"fee": "£150"}]
+    rows = [{"fee": "£350"}, {"fee": "£50"}, {"fee": "£150"}]
     with patch("backend.metrics.get_db", return_value=_make_db(rows)):
         result = await get_fee_distribution("proj1")
     assert len(result) >= 3
