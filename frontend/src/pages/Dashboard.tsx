@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import { MetricCard } from "../components/MetricCard";
 import { SpeedChart } from "../components/SpeedChart";
 import { FilterBreakdown } from "../components/FilterBreakdown";
+import { FeeDistribution } from "../components/FeeDistribution";
 import { HealthChart } from "../components/HealthChart";
 import { ListingsChart } from "../components/ListingsChart";
 import { RunsTable } from "../components/RunsTable";
@@ -22,7 +23,10 @@ const fmtSyncTime = (ts: string | null) => {
   if (diffMin < 1) return "Just now";
   if (diffMin === 1) return "1 min ago";
   if (diffMin < 60) return `${diffMin} mins ago`;
-  return d.toLocaleTimeString();
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr${diffHr === 1 ? "" : "s"} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
 };
 
 interface Props {
@@ -57,6 +61,7 @@ export function Dashboard({ projectId }: Props) {
       qc.invalidateQueries({ queryKey: ["listings", projectId] });
       qc.invalidateQueries({ queryKey: ["funnel", projectId] });
       qc.invalidateQueries({ queryKey: ["filters_series", projectId] });
+      qc.invalidateQueries({ queryKey: ["fee_distribution", projectId] });
       const msg = data.inserted > 0 ? `↓ ${data.inserted} new rows` : "Already up to date";
       setSyncResult(msg);
       setTimeout(() => setSyncResult(null), 4000);
@@ -130,9 +135,9 @@ export function Dashboard({ projectId }: Props) {
             accent="var(--cyan)"
           />
           <MetricCard
-            label="Avg run time"
-            value={fmtMs(o?.avg_ms)}
-            sub={`med ${fmtMs(o?.median_ms)} · max ${fmtMs(o?.max_ms)}`}
+            label="Median run time"
+            value={fmtMs(o?.median_ms)}
+            sub={`avg ${fmtMs(o?.avg_ms)} · max ${fmtMs(o?.max_ms)}`}
             accent="var(--amber)"
           />
           <MetricCard
@@ -193,6 +198,8 @@ export function Dashboard({ projectId }: Props) {
       </div>
 
       <FilterBreakdown projectId={projectId} />
+
+      <FeeDistribution projectId={projectId} />
 
       {/* Runs table */}
       <div style={cardStyle}>

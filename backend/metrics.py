@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 import statistics
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from collections import Counter
+from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .db import get_db
 
@@ -76,9 +78,9 @@ async def get_overview(project_id: str, tz: str = "UTC") -> dict[str, Any]:
         try:
             zone = ZoneInfo(tz)
         except ZoneInfoNotFoundError:
-            zone = timezone.utc
+            zone = UTC
         midnight_local = datetime.now(zone).replace(hour=0, minute=0, second=0, microsecond=0)
-        today = midnight_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        today = midnight_local.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         runs_today_row = await db.execute_fetchall(
             """
             SELECT COUNT(DISTINCT run_id) AS cnt
@@ -144,11 +146,15 @@ async def get_overview(project_id: str, tz: str = "UTC") -> dict[str, Any]:
             """,
             (project_id,),
         )
-        avg_listed = round(listed_row[0]["avg_listed"]) if listed_row and listed_row[0]["avg_listed"] is not None else None
+        avg_listed = (
+            round(listed_row[0]["avg_listed"])
+            if listed_row and listed_row[0]["avg_listed"] is not None
+            else None
+        )
 
         # Last sync time
         sync_row = await db.execute_fetchall(
-            "SELECT last_synced_at FROM sync_state WHERE project_id = ?",
+            "SELECT MAX(last_synced_at) AS last_synced_at FROM sync_state WHERE project_id = ?",
             (project_id,),
         )
         last_synced_at = sync_row[0]["last_synced_at"] if sync_row else None
@@ -246,9 +252,7 @@ async def get_funnel(project_id: str, limit: int = 50) -> list[dict]:
         return result
 
 
-async def get_health_series(
-    project_id: str, since: str, until: str | None = None
-) -> list[dict]:
+async def get_health_series(project_id: str, since: str, until: str | None = None) -> list[dict]:
     """Cumulative warning/error rate per run — same formula as get_overview().
 
     Cumulative is computed over ALL historical runs so the last returned point
@@ -343,6 +347,33 @@ async def get_listings_windows(
         return [dict(r) for r in rows]
 
 
+async def get_runtime_series(project_id: str, since: str, until: str | None = None) -> list[dict]:
+    """Per-run elapsed time (ms) over the given window.
+
+    Returns one point per run that has a Run summary log with elapsed_ms.
+    """
+    until_clause = "AND MIN(timestamp) <= ?" if until else ""
+    params: list[Any] = [project_id, since]
+    if until:
+        params.append(until)
+    async with get_db() as db:
+        rows = await db.execute_fetchall(
+            f"""
+            SELECT
+                MIN(timestamp) AS started_at,
+                MAX(CASE WHEN message = 'Run summary'
+                         THEN CAST(json_extract(details, '$.elapsed_ms') AS INTEGER) END) AS total_ms
+            FROM logs
+            WHERE project_id = ?
+            GROUP BY run_id
+            HAVING total_ms IS NOT NULL AND MIN(timestamp) >= ? {until_clause}
+            ORDER BY started_at ASC
+            """,
+            params,
+        )
+        return [dict(r) for r in rows]
+
+
 async def get_filter_breakdown(project_id: str) -> list[dict]:
     """Aggregate average rejection counts per filter across all runs."""
     async with get_db() as db:
@@ -422,7 +453,7 @@ async def get_filter_breakdown_series(
             mapped: dict[str, int] = {}
             for filter_repr, count in bd.items():
                 short = _shorten_filter_name(filter_repr)
-                mapped[short] = (count or 0)
+                mapped[short] = count or 0
                 all_filters.add(short)
             parsed_rows.append((row["started_at"], mapped))
         except (json.JSONDecodeError, TypeError):
@@ -439,6 +470,49 @@ async def get_filter_breakdown_series(
     return {"filters": sorted_filters, "series": series}
 
 
+_FEE_BANDS: list[tuple[str, int, int]] = [
+    ("£0–50", 0, 50),
+    ("£51–100", 51, 100),
+    ("£101–150", 101, 150),
+    ("£151–200", 151, 200),
+    ("£201–300", 201, 300),
+    ("£301+", 301, 10_000),
+]
+
+
+async def get_fee_distribution(project_id: str) -> list[dict[str, Any]]:
+    async with get_db() as db:
+        rows = await db.execute_fetchall(
+            """
+            SELECT json_extract(details, '$.fee') AS fee
+            FROM logs
+            WHERE project_id = ? AND message = 'Gig passed all filters'
+              AND json_extract(details, '$.fee') IS NOT NULL
+            """,
+            (project_id,),
+        )
+
+    counter: Counter[str] = Counter()
+    for row in rows:
+        raw = row["fee"]
+        if not raw:
+            continue
+        match = re.search(r"£(\d+)", raw)
+        if not match:
+            continue
+        amount = int(match.group(1))
+        for band, lo, hi in _FEE_BANDS:
+            if lo <= amount <= hi:
+                counter[band] += 1
+                break
+
+    return [
+        {"band": band, "count": counter.get(band, 0)}
+        for band, _, _ in _FEE_BANDS
+        if counter.get(band, 0) > 0
+    ]
+
+
 def _shorten_filter_name(repr_str: str) -> str:
     """Turn filter repr strings into short display names.
 
@@ -450,6 +524,7 @@ def _shorten_filter_name(repr_str: str) -> str:
     historical data merges cleanly with the replacement filter.
     """
     import re as _re
+
     if repr_str.startswith("BookedDateFilter"):
         return "AvailabilityFilter (block)"
     if repr_str.startswith("AvailabilityFilter("):

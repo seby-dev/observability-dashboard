@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
@@ -14,12 +14,14 @@ from .alerts import process_alerts
 from .config import PROJECT_MAP, settings
 from .db import get_run, get_run_logs, init_db, list_runs
 from .metrics import (
+    get_fee_distribution,
     get_filter_breakdown,
     get_filter_breakdown_series,
     get_funnel,
     get_health_series,
     get_listings_windows,
     get_overview,
+    get_runtime_series,
     get_speed_series,
 )
 from .scheduler import start_scheduler, stop_scheduler
@@ -58,6 +60,7 @@ def _get_project(project_id: str):
 # Projects
 # ---------------------------------------------------------------------------
 
+
 @app.get("/api/projects")
 async def list_projects():
     return [{"id": p.id, "name": p.name} for p in settings.projects]
@@ -66,6 +69,7 @@ async def list_projects():
 # ---------------------------------------------------------------------------
 # Sync
 # ---------------------------------------------------------------------------
+
 
 @app.post("/api/sync/{project_id}")
 async def sync(project_id: str):
@@ -82,6 +86,7 @@ async def sync(project_id: str):
 # ---------------------------------------------------------------------------
 # Runs
 # ---------------------------------------------------------------------------
+
 
 @app.get("/api/{project_id}/runs")
 async def runs(
@@ -115,6 +120,7 @@ async def run_logs(
 # ---------------------------------------------------------------------------
 # Metrics
 # ---------------------------------------------------------------------------
+
 
 @app.get("/api/{project_id}/metrics/overview")
 async def metrics_overview(project_id: str, tz: Annotated[str, Query()] = "UTC"):
@@ -156,7 +162,7 @@ async def metrics_filters_series(
 ):
     _get_project(project_id)
     if not since:
-        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        since = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
     return await get_filter_breakdown_series(project_id, since=since, until=until)
 
 
@@ -168,8 +174,20 @@ async def metrics_health_hourly(
 ):
     _get_project(project_id)
     if not since:
-        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        since = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
     return await get_health_series(project_id, since=since, until=until)
+
+
+@app.get("/api/{project_id}/metrics/runtime_hourly")
+async def metrics_runtime_hourly(
+    project_id: str,
+    since: Annotated[str | None, Query()] = None,
+    until: Annotated[str | None, Query()] = None,
+):
+    _get_project(project_id)
+    if not since:
+        since = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
+    return await get_runtime_series(project_id, since=since, until=until)
 
 
 @app.get("/api/{project_id}/metrics/listings_windows")
@@ -181,7 +199,13 @@ async def metrics_listings_windows(
 ):
     _get_project(project_id)
     if not since:
-        since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        since = (datetime.now(UTC) - timedelta(days=7)).isoformat()
     return await get_listings_windows(
         project_id, since=since, until=until, window_hours=window_hours
     )
+
+
+@app.get("/api/{project_id}/metrics/fee_distribution")
+async def metrics_fee_distribution(project_id: str):
+    _get_project(project_id)
+    return await get_fee_distribution(project_id)
