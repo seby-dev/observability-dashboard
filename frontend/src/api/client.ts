@@ -107,6 +107,16 @@ export interface ListingsPoint {
   run_count: number;
 }
 
+export interface RuntimePoint {
+  started_at: string;
+  total_ms: number;
+}
+
+export interface FeeBand {
+  band: string;
+  count: number;
+}
+
 export const api = {
   projects: () => request<Project[]>("/projects"),
 
@@ -171,6 +181,17 @@ export const api = {
     if (until) p.set("until", until);
     return request<ListingsPoint[]>(`/${projectId}/metrics/listings_windows?${p}`);
   },
+
+  runtimeHourly: (projectId: string, since?: string, until?: string) => {
+    const p = new URLSearchParams();
+    if (since) p.set("since", since);
+    if (until) p.set("until", until);
+    const qs = p.toString() ? `?${p}` : "";
+    return request<RuntimePoint[]>(`/${projectId}/metrics/runtime_hourly${qs}`);
+  },
+
+  feeDistribution: (projectId: string) =>
+    request<FeeBand[]>(`/${projectId}/metrics/fee_distribution`),
 
   sync: (projectId: string) =>
     request<{ inserted: number }>(`/sync/${projectId}`, { method: "POST" }),
